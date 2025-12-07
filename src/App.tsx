@@ -833,17 +833,3 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
     </div>
   );
 };
-
-#### 第四步：提交更改 (Commit)
-1.  粘贴完代码后，点击页面右上角的绿色 **`Commit changes...`** 按钮。
-2.  再次点击 **`Commit changes`** 确认。
-
----
-
-### 🎉 大功告成！
-
-做完这一步，你就完成了所有的修复工作。
-1.  **Actions** 应该会重新开始跑（变成黄色，然后变绿）。
-2.  变绿后，访问 `https://lens.wokalaka.top`，这次显示的绝对是你的 **AI 镜头应用**！
-
-**快去替换吧，这是最后一块拼图了！** 🧩
