@@ -1,0 +1,8 @@
+{
+  "name": "wpf的镜头",
+  "description": "Mobile-first image recognition app with customizable feedback triggers.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
