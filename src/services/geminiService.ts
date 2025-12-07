@@ -109,5 +109,5 @@ export async function analyzeImageLocal(base64Image: string, rules: RecognitionR
   return null;
 }
 
-// 占位
-export async function extractEmbedding() { return null; }
+// ✅ 修复后的占位函数：接收一个参数但不使用它，防止 TS 报错
+export async function extractEmbedding(image: any) { return null; }
