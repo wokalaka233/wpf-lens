@@ -1,65 +1,69 @@
-import { RecognitionRule, RecognitionLog } from '../types';
+import Bmob from "hydrogen-js-sdk";
+import { RecognitionRule } from '../types';
 
-const KEYS = {
-  RULES: 'smartlens_rules',
-  LOGS: 'smartlens_logs',
-};
+// ============================================================
+// 🔴 必填：去 Bmob 后台复制你的 Secret Key 和 API 安全码
+const SECRET_KEY = "在这里填你的Secret Key";
+const SECURITY_CODE = "在这里填API安全码"; // 如果后台没显示，就留空字符串 ""
+// ============================================================
 
-export const getRules = (): RecognitionRule[] => {
-  const data = localStorage.getItem(KEYS.RULES);
-  return data ? JSON.parse(data) : [];
-};
+// 初始化 Bmob
+Bmob.initialize(SECRET_KEY, SECURITY_CODE);
 
-export const saveRule = (rule: RecognitionRule) => {
-  const rules = getRules();
-  const existingIndex = rules.findIndex((r) => r.id === rule.id);
-  if (existingIndex >= 0) {
-    rules[existingIndex] = rule;
-  } else {
-    rules.push(rule);
+// 1. 获取云端规则
+export async function getRules(): Promise<RecognitionRule[]> {
+  try {
+    const query = Bmob.Query("rules");
+    query.order("-createdAt"); // 最新创建的在前面
+    const res = await query.find();
+    
+    if (Array.isArray(res)) {
+      // Bmob 的数据结构转换
+      return res.map((item: any) => ({
+        id: item.objectId, // Bmob 自动生成的唯一 ID
+        name: item.name,
+        targetType: item.targetType,
+        targetValue: item.targetValue,
+        feedback: item.feedback, 
+        createdAt: new Date(item.createdAt).getTime()
+      }));
+    }
+    return [];
+  } catch (e) {
+    console.error("获取规则失败:", e);
+    return [];
   }
-  localStorage.setItem(KEYS.RULES, JSON.stringify(rules));
-};
+}
 
-export const deleteRule = (id: string) => {
-  const rules = getRules().filter((r) => r.id !== id);
-  localStorage.setItem(KEYS.RULES, JSON.stringify(rules));
-};
-
-export const saveLog = (log: RecognitionLog) => {
-  const logs = getLogs();
-  logs.unshift(log); 
-  if (logs.length > 50) logs.pop();
-  localStorage.setItem(KEYS.LOGS, JSON.stringify(logs));
-};
-
-export const getLogs = (): RecognitionLog[] => {
-  const data = localStorage.getItem(KEYS.LOGS);
-  return data ? JSON.parse(data) : [];
-};
-
-export const seedInitialData = () => {
-  if (getRules().length === 0) {
-    const demoRules: RecognitionRule[] = [
-      {
-        id: '1',
-        name: '尋找 "SALE"',
-        targetType: 'ocr',
-        targetValue: 'SALE',
-        similarityThreshold: 0.8,
-        createdAt: Date.now(),
-        feedback: [{ type: 'text', content: '發現特價商品！' }]
-      },
-      {
-        id: '2',
-        name: '咖啡杯識別',
-        targetType: 'image',
-        targetValue: 'cup',
-        similarityThreshold: 0.8,
-        createdAt: Date.now(),
-        feedback: [{ type: 'text', content: '這是一杯美味的咖啡！' }]
-      }
-    ];
-    localStorage.setItem(KEYS.RULES, JSON.stringify(demoRules));
+// 2. 保存规则 (新增)
+export async function saveRule(rule: RecognitionRule) {
+  const query = Bmob.Query("rules");
+  
+  // 设置字段
+  query.set("name", rule.name);
+  query.set("targetType", rule.targetType);
+  query.set("targetValue", rule.targetValue);
+  query.set("feedback", rule.feedback);
+  
+  // Bmob 会自动处理新增
+  try {
+    await query.save();
+    console.log("✅ 规则已同步到云端");
+  } catch (e) {
+    alert("保存失败，请检查 Bmob Key 是否正确");
+    console.error(e);
   }
-};
+}
+
+// 3. 删除规则
+export async function deleteRule(id: string) {
+  const query = Bmob.Query("rules");
+  try {
+    await query.destroy(id);
+  } catch (e) {
+    console.error("删除失败:", e);
+  }
+}
+
+export function seedInitialData() {}
+export function saveLog() {}
