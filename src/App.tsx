@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Upload, Settings, X, RefreshCw, Trash2, Plus, Play, Pause, AlertCircle, CheckCircle2, ChevronLeft, Image as ImageIcon, Type, ScanLine, Video, FileVideo, Mic, Music, Lock, Unlock, Edit2 } from 'lucide-react';
+import { Camera, Upload, Settings, X, RefreshCw, Trash2, Plus, AlertCircle, CheckCircle2, ChevronLeft, Image as ImageIcon, Type, Video, Music, Lock, Edit2 } from 'lucide-react';
 import * as storageService from './services/storageService';
 import * as localAiService from './services/geminiService';
 import * as mediaStore from './services/mediaStore';
-import { RecognitionRule, FeedbackConfig, TargetType, FeedbackType } from './types';
+import { RecognitionRule, FeedbackType, TargetType, FeedbackConfig } from './types';
+import { GLOBAL_RULES } from './defaultRules';
 
-// Initialize data
+// 初始化本地数据
 storageService.seedInitialData();
 
 type ViewState = 'home' | 'camera' | 'upload' | 'processing' | 'feedback' | 'admin-login' | 'admin';
@@ -17,24 +18,19 @@ export default function App() {
   const [matchResult, setMatchResult] = useState<RecognitionRule | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [processingTime, setProcessingTime] = useState(0);
-  const [isModelLoading, setIsModelLoading] = useState(false);
 
-  // Load data on mount and preload models
+  // 🔄 核心逻辑：加载规则（合并 全局规则 + 本地规则）
   useEffect(() => {
-    setRules(storageService.getRules());
-    
-    const initModels = async () => {
-      setIsModelLoading(true);
-      try {
-        await localAiService.loadModels();
-      } catch (e) {
-        console.error("Model load failed", e);
-      } finally {
-        setIsModelLoading(false);
-      }
+    const loadRules = () => {
+      const localRules = storageService.getRules();
+      // 合并逻辑：全局规则 + 本地规则 (排除ID冲突的)
+      const allRules = [...GLOBAL_RULES, ...localRules.filter(lr => !GLOBAL_RULES.find(gr => gr.id === lr.id))];
+      setRules(allRules);
     };
-    initModels();
-  }, []);
+    
+    loadRules();
+    localAiService.loadModels();
+  }, [view]); // 每次切换视图重新加载，确保后台修改后主页能生效
 
   const handleAnalyze = async (base64Img: string) => {
     setCapturedImage(base64Img);
@@ -44,17 +40,10 @@ export default function App() {
     const startTime = Date.now();
 
     try {
-      // Use Local AI Service
+      // 调用 AI 服务
       const matchedId = await localAiService.analyzeImageLocal(base64Img, rules);
       const endTime = Date.now();
       setProcessingTime((endTime - startTime) / 1000);
-
-      storageService.saveLog({
-        id: Date.now().toString(),
-        timestamp: Date.now(),
-        matchedRuleId: matchedId,
-        success: !!matchedId
-      });
 
       if (matchedId) {
         const rule = rules.find(r => r.id === matchedId);
@@ -64,10 +53,10 @@ export default function App() {
           return;
         }
       }
-      setErrorMsg("未找到匹配項");
+      setErrorMsg("未找到匹配的目标");
       setView('feedback'); 
     } catch (err: any) {
-      setErrorMsg("分析失敗");
+      setErrorMsg("分析出错，请检查网络或 Key 配置");
       console.error(err);
       setView('feedback');
     }
@@ -81,25 +70,18 @@ export default function App() {
     return (
       <AdminPanel 
         rules={rules} 
-        onBack={() => {
-          setRules(storageService.getRules());
-          setView('home');
-        }} 
+        onBack={() => setView('home')} 
       />
     );
   }
 
   return (
     <div className="h-dvh bg-gray-50 text-gray-900 font-sans max-w-lg mx-auto shadow-2xl relative overflow-hidden flex flex-col">
-      
       <header className="bg-white p-4 pt-safe shadow-sm flex justify-between items-center z-10 shrink-0">
         <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           wpf的镜头
         </h1>
-        <button 
-          onClick={() => setView('admin-login')} 
-          className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
-        >
+        <button onClick={() => setView('admin-login')} className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200">
           <Settings className="w-6 h-6 text-gray-600" />
         </button>
       </header>
@@ -108,59 +90,30 @@ export default function App() {
         {view === 'home' && (
           <div className="flex flex-col items-center justify-center h-full px-6 space-y-8 animate-fade-in pb-safe">
             <div className="text-center space-y-3">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Camera className="w-10 h-10 text-blue-600" />
+              <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce-slow">
+                <Camera className="w-12 h-12 text-blue-600" />
               </div>
-              <p className="text-gray-800 text-2xl font-bold">準備掃描</p>
+              <p className="text-gray-800 text-2xl font-bold">准备扫描</p>
+              <p className="text-gray-500 text-sm">通义千问视觉引擎 (Qwen-VL) 已就绪</p>
             </div>
             
-            {isModelLoading ? (
-              <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm">
-                <div className="w-6 h-6 border-2 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
-                <span className="text-sm text-gray-500">正在加載 AI 模型...</span>
-              </div>
-            ) : (
-              <div className="w-full space-y-4 max-w-xs">
-                <button 
-                  onClick={() => setView('camera')}
-                  className="w-full bg-blue-600 text-white p-4 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 font-semibold text-lg"
-                >
-                  <Camera className="w-6 h-6" />
-                  開啟相機
-                </button>
-
-                <button 
-                  onClick={() => setView('upload')}
-                  className="w-full bg-white border border-gray-200 text-gray-700 p-4 rounded-2xl shadow-sm active:scale-95 transition-all flex items-center justify-center gap-3 font-semibold text-lg"
-                >
-                  <Upload className="w-6 h-6" />
-                  上傳圖片
-                </button>
-              </div>
-            )}
+            <div className="w-full space-y-4 max-w-xs">
+              <button onClick={() => setView('camera')} className="w-full bg-blue-600 text-white p-4 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 font-bold text-lg">
+                <Camera className="w-6 h-6" /> 开启相机
+              </button>
+              <button onClick={() => setView('upload')} className="w-full bg-white border border-gray-200 text-gray-700 p-4 rounded-2xl shadow-sm active:scale-95 transition-all flex items-center justify-center gap-3 font-bold text-lg">
+                <Upload className="w-6 h-6" /> 上传图片
+              </button>
+            </div>
             
-            {rules.length === 0 && (
-               <div className="bg-orange-50 text-orange-700 text-xs p-3 rounded-lg flex items-center gap-2 max-w-xs">
-                 <AlertCircle className="w-4 h-4 shrink-0" />
-                 <span>尚未配置規則。</span>
-               </div>
-            )}
+            <div className="text-xs text-gray-400 mt-8 bg-gray-100 px-3 py-1 rounded-full">
+              当前已加载 {rules.length} 条识别规则
+            </div>
           </div>
         )}
 
-        {view === 'camera' && (
-          <CameraView 
-            onCapture={handleAnalyze} 
-            onClose={() => setView('home')} 
-          />
-        )}
-
-        {view === 'upload' && (
-          <UploadView 
-            onUpload={handleAnalyze} 
-            onClose={() => setView('home')} 
-          />
-        )}
+        {view === 'camera' && <CameraView onCapture={handleAnalyze} onClose={() => setView('home')} />}
+        {view === 'upload' && <UploadView onUpload={handleAnalyze} onClose={() => setView('home')} />}
 
         {view === 'processing' && (
           <div className="flex flex-col items-center justify-center h-full space-y-6 bg-white absolute inset-0 z-20">
@@ -169,8 +122,8 @@ export default function App() {
               <div className="w-24 h-24 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
             </div>
             <div className="text-center space-y-2">
-              <p className="text-xl font-bold text-gray-800 animate-pulse">正在分析...</p>
-              <p className="text-sm text-gray-500">識別文字與物體特徵</p>
+              <p className="text-xl font-bold text-gray-800 animate-pulse">正在思考中...</p>
+              <p className="text-sm text-gray-500">AI 正在识别画面内容</p>
             </div>
             {capturedImage && (
                <div className="w-48 h-48 rounded-2xl overflow-hidden shadow-inner border border-gray-100 relative">
@@ -194,7 +147,7 @@ export default function App() {
   );
 }
 
-// --- Sub-Components ---
+// --- 子组件 (全中文汉化) ---
 
 const AdminLoginView = ({ onSuccess, onBack }: { onSuccess: () => void, onBack: () => void }) => {
   const [password, setPassword] = useState('');
@@ -202,9 +155,8 @@ const AdminLoginView = ({ onSuccess, onBack }: { onSuccess: () => void, onBack: 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === '11335510') {
-      onSuccess();
-    } else {
+    if (password === '11335510') onSuccess();
+    else {
       setError(true);
       setTimeout(() => setError(false), 2000);
     }
@@ -212,33 +164,18 @@ const AdminLoginView = ({ onSuccess, onBack }: { onSuccess: () => void, onBack: 
 
   return (
     <div className="h-dvh bg-white flex flex-col items-center justify-center p-6 text-center">
-      <div className="bg-blue-50 p-4 rounded-full mb-6">
-        <Lock className="w-8 h-8 text-blue-600" />
-      </div>
-      <h2 className="text-2xl font-bold mb-2">管理員登入</h2>
-      <p className="text-gray-500 mb-8 text-sm">請輸入後台管理密碼</p>
-      
+      <div className="bg-blue-50 p-4 rounded-full mb-6"><Lock className="w-8 h-8 text-blue-600" /></div>
+      <h2 className="text-2xl font-bold mb-2">管理员登录</h2>
+      <p className="text-gray-500 mb-8 text-sm">请输入后台管理密码</p>
       <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-4">
         <input 
-          type="password" 
-          pattern="[0-9]*" 
-          inputMode="numeric"
-          placeholder="輸入密碼"
+          type="password" pattern="[0-9]*" inputMode="numeric" placeholder="输入密码"
           className={`w-full text-center text-xl tracking-widest p-4 rounded-xl border-2 outline-none transition-all ${error ? 'border-red-500 bg-red-50' : 'border-gray-200 focus:border-blue-500'}`}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoFocus
+          value={password} onChange={(e) => setPassword(e.target.value)} autoFocus
         />
-        {error && <p className="text-red-500 text-sm animate-pulse">密碼錯誤</p>}
-        
-        <button 
-          type="submit" 
-          className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all"
-        >
-          進入後台
-        </button>
+        {error && <p className="text-red-500 text-sm animate-pulse">密码错误</p>}
+        <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">进入后台</button>
       </form>
-      
       <button onClick={onBack} className="mt-8 text-gray-400 text-sm">取消返回</button>
     </div>
   );
@@ -248,33 +185,21 @@ const CameraView = ({ onCapture, onClose }: { onCapture: (img: string) => void, 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isFront, setIsFront] = useState(false);
-  const [error, setError] = useState('');
 
   const startCamera = useCallback(async () => {
     try {
-      if (videoRef.current && videoRef.current.srcObject) {
-         const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-         tracks.forEach(track => track.stop());
-      }
-      const constraints: MediaStreamConstraints = {
-        video: { facingMode: isFront ? 'user' : 'environment' },
-        audio: false
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: isFront ? 'user' : 'environment' }, audio: false
+      });
       if (videoRef.current) videoRef.current.srcObject = stream;
-      setError('');
-    } catch (err: any) {
-      setError("無法訪問相機");
-    }
+    } catch (err) { alert("无法访问相机，请检查权限"); }
   }, [isFront]);
 
   useEffect(() => {
     startCamera();
     return () => {
-       if (videoRef.current && videoRef.current.srcObject) {
-         const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-         tracks.forEach(track => track.stop());
-      }
+       const stream = videoRef.current?.srcObject as MediaStream;
+       stream?.getTracks().forEach(track => track.stop());
     };
   }, [startCamera]);
 
@@ -296,12 +221,12 @@ const CameraView = ({ onCapture, onClose }: { onCapture: (img: string) => void, 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col h-dvh">
       <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
-         {error ? <div className="text-white">{error}</div> : <video ref={videoRef} autoPlay playsInline muted className={`absolute w-full h-full object-cover ${isFront ? 'scale-x-[-1]' : ''}`} />}
+         <video ref={videoRef} autoPlay playsInline muted className={`absolute w-full h-full object-cover ${isFront ? 'scale-x-[-1]' : ''}`} />
          <canvas ref={canvasRef} className="hidden" />
       </div>
       <div className="bg-black/80 p-6 pb-safe flex justify-between items-center">
          <button onClick={onClose} className="p-4 text-white rounded-full bg-white/10"><X /></button>
-         <button onClick={takePhoto} disabled={!!error} className="w-20 h-20 bg-white rounded-full border-4 border-gray-300" />
+         <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-4 border-gray-300" />
          <button onClick={() => setIsFront(!isFront)} className="p-4 text-white rounded-full bg-white/10"><RefreshCw /></button>
       </div>
     </div>
@@ -322,8 +247,8 @@ const UploadView = ({ onUpload, onClose }: { onUpload: (img: string) => void, on
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6">
        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFile} className="hidden" />
-       <h2 className="text-xl font-bold mb-4">選擇圖片</h2>
-       <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white px-6 py-3 rounded-lg mb-4">打開相簿</button>
+       <h2 className="text-xl font-bold mb-4">选择图片</h2>
+       <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white px-6 py-3 rounded-lg mb-4">打开相册</button>
        <button onClick={onClose} className="text-gray-500">取消</button>
     </div>
   );
@@ -331,77 +256,32 @@ const UploadView = ({ onUpload, onClose }: { onUpload: (img: string) => void, on
 
 const FeedbackView = ({ result, error, capturedImage, processingTime, onClose }: { result: RecognitionRule | null, error: string | null, capturedImage: string | null, processingTime: number, onClose: () => void }) => {
   const [localMediaSrcs, setLocalMediaSrcs] = useState<Record<string, string>>({});
-  const videoRefs = useRef<HTMLVideoElement[]>([]);
-  const audioRefs = useRef<HTMLAudioElement[]>([]);
 
-  // Load all media resources
   useEffect(() => {
-    const urls: string[] = [];
-    
-    const loadAllMedia = async () => {
-      if (!result) return;
-      
+    if (!result) return;
+    const loadMedia = async () => {
       const newSrcs: Record<string, string> = {};
-      
       for (const fb of result.feedback) {
-         if (['video', 'audio', 'image'].includes(fb.type) && fb.content) {
-            if (fb.content.startsWith('local::')) {
-               const mediaId = fb.content.replace('local::', '');
-               try {
-                  const blob = await mediaStore.getMedia(mediaId);
-                  if (blob) {
-                     const url = URL.createObjectURL(blob);
-                     newSrcs[fb.content] = url;
-                     urls.push(url);
-                  }
-               } catch(e) { console.error(e); }
-            } else {
-               newSrcs[fb.content] = fb.content;
-            }
+         if (fb.content.startsWith('local::')) {
+            try {
+               const blob = await mediaStore.getMedia(fb.content.replace('local::', ''));
+               if (blob) newSrcs[fb.content] = URL.createObjectURL(blob);
+            } catch(e) {}
          }
       }
       setLocalMediaSrcs(newSrcs);
     };
-
-    loadAllMedia();
-
-    return () => {
-       urls.forEach(url => URL.revokeObjectURL(url));
-    };
+    loadMedia();
   }, [result]);
 
-  // Autoplay Effect
-  useEffect(() => {
-    if (result) {
-       setTimeout(() => {
-          videoRefs.current.forEach(v => v?.play().catch(e => console.log("Video autoplay prevented", e)));
-          audioRefs.current.forEach(a => a?.play().catch(e => console.log("Audio autoplay prevented", e)));
-       }, 600);
-    }
-  }, [result, localMediaSrcs]);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center h-dvh overflow-hidden bg-black">
-      {/* Background Layer */}
-      {capturedImage && (
-        <div className="absolute inset-0 z-0">
-          <img 
-            src={capturedImage} 
-            className="w-full h-full object-cover animate-blur-in" 
-            alt="Background" 
-          />
-          <div className="absolute inset-0 bg-black/50 animate-fade-in"></div>
-        </div>
-      )}
-      
-      <div className="absolute inset-0 z-10 bg-white animate-flash pointer-events-none"></div>
-
-      <div className="z-20 w-full max-w-md p-4 flex flex-col items-center animate-pop-out max-h-screen overflow-y-auto no-scrollbar">
-        
+    <div className="fixed inset-0 z-50 flex items-center justify-center h-dvh bg-black">
+      {capturedImage && <div className="absolute inset-0 z-0 opacity-50"><img src={capturedImage} className="w-full h-full object-cover blur-md" /></div>}
+      <div className="z-20 w-full max-w-md p-4 flex flex-col items-center animate-pop-out max-h-screen overflow-y-auto">
         {error ? (
           <div className="bg-white rounded-3xl p-6 w-full text-center shadow-2xl">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="font-bold mb-2">未匹配</h3>
+            <h3 className="font-bold mb-2">未识别到目标</h3>
             <p className="text-gray-500 mb-4">{error}</p>
             <button onClick={onClose} className="w-full bg-gray-900 text-white py-3 rounded-xl">返回</button>
           </div>
@@ -409,66 +289,20 @@ const FeedbackView = ({ result, error, capturedImage, processingTime, onClose }:
           <div className="w-full space-y-4 pb-10">
             <div className="text-center text-white mb-2 shadow-sm">
                <h2 className="text-3xl font-bold drop-shadow-md">{result.name}</h2>
-               <p className="text-white/60 text-xs mt-1">匹配成功 · 耗時 {processingTime.toFixed(2)}s</p>
+               <p className="text-white/80 text-xs mt-1">耗时 {processingTime.toFixed(2)}s</p>
             </div>
-
-            {/* Iterate through all feedbacks */}
             {result.feedback.map((fb, idx) => {
                const src = localMediaSrcs[fb.content] || (fb.content.startsWith('local::') ? null : fb.content);
-               
-               if (fb.type === 'text') {
-                 return (
-                   <div key={idx} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 text-center shadow-xl border border-white/20">
-                      <p className="text-gray-900 text-lg font-medium">{fb.content}</p>
-                   </div>
-                 );
-               }
-
-               if (fb.type === 'image' && src) {
-                 return (
-                   <div key={idx} className="bg-white p-2 rounded-2xl shadow-xl">
-                      <img src={src} className="w-full h-auto rounded-xl max-h-60 object-contain mx-auto" alt="Feedback" />
-                   </div>
-                 );
-               }
-
-               if (fb.type === 'video' && src) {
-                 return (
-                    <div key={idx} className="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-xl border-2 border-white/20">
-                      <video 
-                        ref={el => { if(el) videoRefs.current[idx] = el }} 
-                        src={src} 
-                        className="w-full h-full object-contain" 
-                        controls 
-                        playsInline 
-                      />
-                    </div>
-                 );
-               }
-
-               if (fb.type === 'audio' && src) {
-                 return (
-                   <div key={idx} className="bg-white/90 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 shadow-xl">
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center shrink-0 animate-pulse-fast">
-                        <Music className="text-white w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                         <audio 
-                           ref={el => { if(el) audioRefs.current[idx] = el }} 
-                           src={src} 
-                           controls 
-                           className="w-full h-8" 
-                         />
-                      </div>
-                   </div>
-                 );
-               }
-               return null;
+               return (
+                 <div key={idx} className="bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-white/20">
+                    {fb.type === 'text' && <p className="text-lg font-medium text-center">{fb.content}</p>}
+                    {fb.type === 'image' && src && <img src={src} className="w-full rounded-xl max-h-60 object-contain" />}
+                    {fb.type === 'video' && src && <video src={src} controls className="w-full rounded-xl" autoPlay />}
+                    {fb.type === 'audio' && src && <audio src={src} controls className="w-full" autoPlay />}
+                 </div>
+               );
             })}
-
-            <button onClick={onClose} className="w-full bg-white/10 backdrop-blur-md border border-white/20 text-white py-4 rounded-2xl font-bold hover:bg-white/20 transition-all active:scale-95 shadow-lg mt-4">
-              完成確認
-            </button>
+            <button onClick={onClose} className="w-full bg-white/20 backdrop-blur-md text-white py-4 rounded-2xl font-bold mt-4">完成确认</button>
           </div>
         ) : null}
       </div>
@@ -476,33 +310,32 @@ const FeedbackView = ({ result, error, capturedImage, processingTime, onClose }:
   );
 };
 
+// 完整的后台管理面板（含规则增删改查）
 const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () => void }) => {
+  const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Initialize with a default structure
+  // 默认空规则
   const defaultRule: Partial<RecognitionRule> = { 
-    targetType: 'ocr', 
+    targetType: 'image', 
     feedback: [{ type: 'text', content: '' }],
-    similarityThreshold: 0.85,
     name: '',
     targetValue: ''
   };
-
   const [formRule, setFormRule] = useState<Partial<RecognitionRule>>(defaultRule);
-  const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
-  
-  const [processingRefImage, setProcessingRefImage] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  
-  const fileRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
-  
-  // Track which feedback is currently being edited for file upload
-  const [activeFeedbackTypeForUpload, setActiveFeedbackTypeForUpload] = useState<FeedbackType | null>(null);
+  const [activeUploadType, setActiveUploadType] = useState<FeedbackType | null>(null);
 
+  // 开始编辑
   const startEdit = (rule: RecognitionRule) => {
+    // 如果是全局规则（ID以rule_开头），提示不能在本地改
+    if (rule.id.startsWith('rule_')) {
+      alert("这是全局规则，请通过修改 GitHub 代码来更新它。");
+      return;
+    }
     setEditingId(rule.id);
-    setFormRule(JSON.parse(JSON.stringify(rule))); // Deep copy
+    setFormRule(JSON.parse(JSON.stringify(rule)));
     setViewMode('form');
   };
 
@@ -513,152 +346,120 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
   };
 
   const handleSave = () => {
-    if (!formRule.name) return alert("請填寫名稱");
-    if (formRule.targetType !== 'similarity' && !formRule.targetValue) return alert("請填寫目標值");
-    if (formRule.targetType === 'similarity' && !formRule.embedding) return alert("請上傳參考圖片");
+    if (!formRule.name) return alert("请填写名称");
+    if (!formRule.targetValue) return alert("请填写识别目标描述");
     
-    // Filter out empty feedbacks
     const validFeedback = formRule.feedback?.filter(f => f.content.trim() !== '') || [];
-    if (validFeedback.length === 0) return alert("請至少設置一個有效的反饋內容");
+    if (validFeedback.length === 0) return alert("请至少设置一个反馈内容");
 
     const rule: RecognitionRule = {
       id: editingId || Date.now().toString(),
       name: formRule.name,
       targetType: formRule.targetType as TargetType,
-      targetValue: formRule.targetValue || 'image-ref',
-      embedding: formRule.embedding,
-      similarityThreshold: formRule.similarityThreshold || 0.8,
+      targetValue: formRule.targetValue || '',
       feedback: validFeedback,
-      createdAt: formRule.createdAt || Date.now()
+      createdAt: Date.now()
     };
     storageService.saveRule(rule);
     setViewMode('list');
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("確定要刪除嗎？")) {
+    if (id.startsWith('rule_')) {
+      alert("全局规则无法删除");
+      return;
+    }
+    if (confirm("确定要删除吗？")) {
       storageService.deleteRule(id);
-      onBack();
+      onBack(); // 强制刷新
     }
   };
 
-  // Helper to toggle feedback types
-  const toggleFeedbackType = (type: FeedbackType) => {
-    const currentFeedback = formRule.feedback || [];
-    const exists = currentFeedback.find(f => f.type === type);
-    
-    if (exists) {
-      // Remove
-      setFormRule({ ...formRule, feedback: currentFeedback.filter(f => f.type !== type) });
-    } else {
-      // Add
-      setFormRule({ ...formRule, feedback: [...currentFeedback, { type, content: '' }] });
-    }
-  };
-
-  const updateFeedbackContent = (type: FeedbackType, content: string) => {
-    const currentFeedback = formRule.feedback || [];
-    setFormRule({
-      ...formRule,
-      feedback: currentFeedback.map(f => f.type === type ? { ...f, content } : f)
-    });
-  };
-
-  // Process uploaded reference image for embedding
-  const handleRefImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProcessingRefImage(true);
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        if (ev.target?.result) {
-          const base64 = ev.target.result as string;
-          const img = new Image();
-          img.src = base64;
-          await new Promise(r => img.onload = r);
-          
-          const embedding = await localAiService.extractEmbedding(img);
-          if (embedding) {
-            setFormRule({ ...formRule, embedding, targetValue: 'custom-image' });
-          } else {
-            alert("無法提取圖片特徵");
-          }
-          setProcessingRefImage(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Handle Media Upload for Feedback
+  // 处理多媒体上传
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    // IMPORTANT: Check activeFeedbackTypeForUpload is not null
-    if (file && activeFeedbackTypeForUpload) {
+    if (file && activeUploadType) {
       setUploadingMedia(true);
       try {
         const id = await mediaStore.saveMedia(file);
-        updateFeedbackContent(activeFeedbackTypeForUpload, `local::${id}`);
-      } catch (err) {
-        console.error(err);
-        alert("文件保存失敗");
-      } finally {
-        setUploadingMedia(false);
-        setActiveFeedbackTypeForUpload(null);
+        // 更新表单中的反馈内容
+        const currentFeedback = formRule.feedback || [];
+        const exists = currentFeedback.find(f => f.type === activeUploadType);
+        let newFeedback;
+        if (exists) {
+          newFeedback = currentFeedback.map(f => f.type === activeUploadType ? { ...f, content: `local::${id}` } : f);
+        } else {
+          newFeedback = [...currentFeedback, { type: activeUploadType, content: `local::${id}` }];
+        }
+        setFormRule({ ...formRule, feedback: newFeedback });
+      } catch (err) { alert("文件保存失败"); } 
+      finally { 
+        setUploadingMedia(false); 
+        setActiveUploadType(null);
       }
     }
   };
 
-  const triggerMediaUpload = (type: FeedbackType) => {
-    setActiveFeedbackTypeForUpload(type);
+  const triggerUpload = (type: FeedbackType) => {
+    setActiveUploadType(type);
     setTimeout(() => mediaInputRef.current?.click(), 100);
   };
 
-  const getAcceptType = () => {
-    switch(activeFeedbackTypeForUpload) {
-      case 'video': return 'video/*';
-      case 'audio': return 'audio/*';
-      case 'image': return 'image/*';
-      default: return '*/*';
+  const updateTextFeedback = (text: string) => {
+    const currentFeedback = formRule.feedback || [];
+    const exists = currentFeedback.find(f => f.type === 'text');
+    let newFeedback;
+    if (exists) {
+      newFeedback = currentFeedback.map(f => f.type === 'text' ? { ...f, content: text } : f);
+    } else {
+      newFeedback = [...currentFeedback, { type: 'text' as FeedbackType, content: text }];
     }
+    setFormRule({ ...formRule, feedback: newFeedback });
   };
+
+  const getTextContent = () => formRule.feedback?.find(f => f.type === 'text')?.content || '';
+  const hasFeedback = (type: FeedbackType) => formRule.feedback?.some(f => f.type === type && f.content);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white p-4 sticky top-0 z-10 flex items-center gap-4 shadow-sm">
         <button onClick={() => viewMode === 'form' ? setViewMode('list') : onBack()}><ChevronLeft /></button>
-        <h2 className="font-bold">{viewMode === 'form' ? (editingId ? '編輯規則' : '新增規則') : '管理後台'}</h2>
+        <h2 className="font-bold text-xl">{viewMode === 'form' ? (editingId ? '编辑规则' : '新增规则') : '后台管理'}</h2>
       </div>
 
       <div className="p-4 space-y-4">
         {viewMode === 'list' && (
            <>
-             <button onClick={startAdd} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 flex items-center justify-center gap-2">
-               <Plus /> 新增規則
+             <div className="bg-blue-50 p-4 rounded-xl mb-2 text-sm text-blue-800 shadow-sm border border-blue-100">
+                <p className="font-bold mb-1">📢 规则同步说明</p>
+                <p>下方列表包含 <span className="font-bold">全局规则</span> (代码内置) 和 <span className="font-bold">本地规则</span> (仅本机有效)。如需给所有用户添加规则，请修改代码中的 <code>defaultRules.ts</code>。</p>
+             </div>
+
+             <button onClick={startAdd} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 flex items-center justify-center gap-2 font-bold hover:bg-gray-100 transition-colors">
+               <Plus /> 新增本地测试规则
              </button>
              
              {rules.map(rule => (
-                <div key={rule.id} className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center border border-gray-100">
+                <div key={rule.id} className={`bg-white p-4 rounded-xl shadow-sm flex justify-between items-center border ${rule.id.startsWith('rule_') ? 'border-purple-200 bg-purple-50/30' : 'border-gray-100'}`}>
                   <div className="flex items-center gap-3 overflow-hidden">
-                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${rule.targetType === 'ocr' ? 'bg-purple-100 text-purple-600' : rule.targetType === 'image' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
-                        {rule.targetType === 'ocr' && <Type size={20} />}
-                        {rule.targetType === 'image' && <ImageIcon size={20} />}
-                        {rule.targetType === 'similarity' && <ScanLine size={20} />}
+                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${rule.targetType === 'ocr' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                        {rule.targetType === 'ocr' ? <Type size={20} /> : <ImageIcon size={20} />}
                      </div>
                      <div className="min-w-0">
-                        <div className="font-bold truncate text-gray-800">{rule.name}</div>
-                        <div className="flex gap-1 mt-1">
-                          {rule.feedback.map((f, i) => (
-                             <span key={i} className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 border border-gray-200">
-                               {f.type === 'text' ? '文' : f.type === 'video' ? '影' : f.type === 'audio' ? '音' : '圖'}
-                             </span>
-                          ))}
+                        <div className="font-bold truncate text-gray-800 flex items-center gap-2">
+                          {rule.name}
+                          {rule.id.startsWith('rule_') && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 rounded border border-purple-200">全局</span>}
                         </div>
+                        <div className="text-xs text-gray-400 truncate">目标: {rule.targetValue}</div>
                      </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => startEdit(rule)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-5 h-5" /></button>
-                    <button onClick={() => handleDelete(rule.id)} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-5 h-5" /></button>
+                    {!rule.id.startsWith('rule_') && (
+                      <>
+                        <button onClick={() => startEdit(rule)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg"><Edit2 className="w-5 h-5" /></button>
+                        <button onClick={() => handleDelete(rule.id)} className="text-red-400 p-2 hover:bg-red-50 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -667,164 +468,66 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
 
         {viewMode === 'form' && (
            <div className="bg-white p-4 rounded-xl shadow border border-blue-200 space-y-6">
+              <input type="file" accept="*/*" ref={mediaInputRef} className="hidden" onChange={handleMediaUpload} />
               
-              {/* Name */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1 font-bold">1. 規則名稱</label>
-                <input 
-                  placeholder="例如：我的鑰匙" 
-                  className="w-full border p-2 rounded" 
-                  value={formRule.name || ''} 
-                  onChange={e => setFormRule({...formRule, name: e.target.value})} 
+                <label className="text-xs text-gray-500 block mb-1 font-bold">1. 规则名称</label>
+                <input placeholder="例如：我的钥匙" className="w-full border p-3 rounded-lg bg-gray-50 focus:bg-white transition-colors" value={formRule.name || ''} onChange={e => setFormRule({...formRule, name: e.target.value})} />
+              </div>
+              
+              <div>
+                <label className="text-xs text-gray-500 block mb-2 font-bold">2. 识别类型</label>
+                <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                  <button onClick={() => setFormRule({...formRule, targetType: 'image'})} className={`flex-1 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all ${formRule.targetType === 'image' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>
+                    <ImageIcon size={16} /> 物体/场景
+                  </button>
+                  <button onClick={() => setFormRule({...formRule, targetType: 'ocr'})} className={`flex-1 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all ${formRule.targetType === 'ocr' ? 'bg-white shadow text-orange-600' : 'text-gray-400'}`}>
+                    <Type size={16} /> 包含文字
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1 font-bold">3. 目标描述</label>
+                <textarea 
+                  placeholder={formRule.targetType === 'ocr' ? "例如：JAY (输入你要找的文字)" : "例如：一个红色的消防栓 (描述画面内容)"}
+                  className="w-full border p-3 rounded-lg bg-gray-50 min-h-[80px]"
+                  value={formRule.targetValue || ''}
+                  onChange={e => setFormRule({...formRule, targetValue: e.target.value})}
                 />
               </div>
-              
-              {/* Target Type */}
+
               <div>
-                <label className="text-xs text-gray-500 block mb-2 font-bold">2. 識別目標類型</label>
-                <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
-                  <button onClick={() => setFormRule({...formRule, targetType: 'ocr'})} className={`flex-1 py-2 rounded text-sm flex items-center justify-center gap-1 ${formRule.targetType === 'ocr' ? 'bg-white shadow text-blue-700' : 'text-gray-500'}`}>
-                    <Type size={16} /> 文字
-                  </button>
-                  <button onClick={() => setFormRule({...formRule, targetType: 'image'})} className={`flex-1 py-2 rounded text-sm flex items-center justify-center gap-1 ${formRule.targetType === 'image' ? 'bg-white shadow text-blue-700' : 'text-gray-500'}`}>
-                    <ImageIcon size={16} /> 物體
-                  </button>
-                  <button onClick={() => setFormRule({...formRule, targetType: 'similarity'})} className={`flex-1 py-2 rounded text-sm flex items-center justify-center gap-1 ${formRule.targetType === 'similarity' ? 'bg-white shadow text-blue-700' : 'text-gray-500'}`}>
-                    <ScanLine size={16} /> 比對
-                  </button>
-                </div>
-              </div>
-
-              {/* Specific Config based on Target Type */}
-              <div className="bg-gray-50 p-3 rounded-lg">
-                {formRule.targetType === 'ocr' && (
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">目標關鍵字</label>
-                    <input 
-                      placeholder="例如：SALE" 
-                      className="w-full border p-2 rounded bg-white"
-                      value={formRule.targetValue || ''}
-                      onChange={e => setFormRule({...formRule, targetValue: e.target.value})}
-                    />
-                  </div>
-                )}
-
-                {formRule.targetType === 'image' && (
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">物體英文名稱</label>
-                    <input 
-                      placeholder="例如：cup, phone, laptop" 
-                      className="w-full border p-2 rounded bg-white"
-                      value={formRule.targetValue || ''}
-                      onChange={e => setFormRule({...formRule, targetValue: e.target.value})}
-                    />
-                  </div>
-                )}
-
-                {formRule.targetType === 'similarity' && (
-                  <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block mb-1">上傳參考圖片</label>
-                    <input type="file" accept="image/*" ref={fileRef} onChange={handleRefImage} className="hidden" />
-                    <button 
-                      onClick={() => fileRef.current?.click()}
-                      className={`w-full py-6 border-2 border-dashed rounded-lg flex flex-col items-center justify-center bg-white ${formRule.embedding ? 'border-green-400 bg-green-50' : 'border-gray-300'}`}
-                    >
-                      {processingRefImage ? (
-                        <span className="text-sm">正在提取特徵...</span>
-                      ) : formRule.embedding ? (
-                        <span className="text-green-600 font-bold flex items-center gap-2"><CheckCircle2 size={20}/> 圖片特徵已保存</span>
-                      ) : (
-                        <span className="text-gray-400 text-sm">點擊上傳被對比的圖片</span>
-                      )}
-                    </button>
-                    
-                    <label className="text-xs text-gray-500 block mt-2">相似度閾值 ({formRule.similarityThreshold})</label>
-                    <input 
-                      type="range" min="0.5" max="0.99" step="0.01" 
-                      className="w-full"
-                      value={formRule.similarityThreshold || 0.85}
-                      onChange={e => setFormRule({...formRule, similarityThreshold: parseFloat(e.target.value)})}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Feedback Section (Multi-select) */}
-              <div>
-                <label className="text-xs text-gray-500 block mb-2 font-bold">3. 觸發反饋設置 (可多選)</label>
-                
-                {/* Toggles */}
-                <div className="grid grid-cols-4 gap-2 mb-4">
-                   {['text', 'image', 'video', 'audio'].map((type) => {
-                      const isSelected = formRule.feedback?.some(f => f.type === type);
-                      return (
-                        <button 
-                          key={type}
-                          onClick={() => toggleFeedbackType(type as FeedbackType)}
-                          className={`py-3 text-xs border rounded-lg flex flex-col items-center gap-1 transition-all ${isSelected ? 'bg-gray-800 text-white border-gray-800 shadow-md transform scale-105' : 'bg-white text-gray-400 border-gray-200'}`}
-                        >
-                          {type === 'text' && <Type size={16}/>}
-                          {type === 'image' && <ImageIcon size={16}/>}
-                          {type === 'video' && <Video size={16}/>}
-                          {type === 'audio' && <Music size={16}/>}
-                          {type === 'text' ? '文字' : type === 'image' ? '圖片' : type === 'video' ? '影片' : '音樂'}
-                        </button>
-                      );
-                   })}
-                </div>
-
-                {/* Inputs for Selected Feedbacks */}
-                <div className="space-y-4">
-                   <input 
-                      type="file" 
-                      accept={getAcceptType()} 
-                      ref={mediaInputRef} 
-                      className="hidden" 
-                      onChange={handleMediaUpload}
-                   />
-
-                   {formRule.feedback?.map((fb) => (
-                      <div key={fb.type} className="animate-fade-in">
-                        <label className="text-xs font-bold text-gray-700 mb-1 flex items-center gap-2">
-                           {fb.type === 'text' && <Type size={12}/>}
-                           {fb.type === 'image' && <ImageIcon size={12}/>}
-                           {fb.type === 'video' && <Video size={12}/>}
-                           {fb.type === 'audio' && <Music size={12}/>}
-                           設置 {fb.type === 'text' ? '文字' : fb.type === 'image' ? '圖片' : fb.type === 'video' ? '影片' : '音頻'} 内容
-                        </label>
-                        
-                        {fb.type === 'text' ? (
-                           <textarea 
-                             placeholder="輸入顯示的文字訊息..." 
-                             className="w-full border p-3 rounded-xl min-h-[80px]"
-                             value={fb.content}
-                             onChange={e => updateFeedbackContent('text', e.target.value)}
-                           />
-                        ) : (
-                           <button 
-                             onClick={() => triggerMediaUpload(fb.type)}
-                             className={`w-full py-4 border-2 border-dashed rounded-lg flex items-center justify-center gap-2 ${fb.content?.startsWith('local::') ? 'border-green-400 bg-green-50' : 'border-gray-300 bg-gray-50'}`}
-                           >
-                              {uploadingMedia && activeFeedbackTypeForUpload === fb.type ? (
-                                <span className="text-sm">正在上傳...</span>
-                              ) : fb.content?.startsWith('local::') ? (
-                                <span className="text-green-600 font-bold flex items-center gap-2">
-                                  <CheckCircle2 size={16}/> 已保存 (點擊更換)
-                                </span>
-                              ) : (
-                                <span className="text-gray-500 text-sm flex items-center gap-2"><Upload size={16}/> 上傳文件</span>
-                              )}
-                           </button>
-                        )}
+                <label className="text-xs text-gray-500 block mb-2 font-bold">4. 触发反馈 (可多选)</label>
+                <div className="space-y-3">
+                   {/* 文字反馈 */}
+                   <div className="border border-gray-200 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-2 font-bold text-sm text-gray-700">
+                        <Type size={16} /> 文字消息
                       </div>
-                   ))}
+                      <textarea placeholder="识别成功后显示的文字..." className="w-full border-b border-gray-100 p-2 text-sm focus:outline-none" value={getTextContent()} onChange={e => updateTextFeedback(e.target.value)} />
+                   </div>
+
+                   {/* 图片反馈 */}
+                   <button onClick={() => triggerUpload('image')} className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${hasFeedback('image') ? 'bg-green-50 border-green-200 text-green-600' : 'border-gray-200 text-gray-500'}`}>
+                      <ImageIcon size={16} /> {hasFeedback('image') ? '图片已上传 (点击更换)' : '上传反馈图片'}
+                   </button>
+
+                   {/* 视频反馈 */}
+                   <button onClick={() => triggerUpload('video')} className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${hasFeedback('video') ? 'bg-green-50 border-green-200 text-green-600' : 'border-gray-200 text-gray-500'}`}>
+                      <Video size={16} /> {hasFeedback('video') ? '视频已上传 (点击更换)' : '上传反馈视频'}
+                   </button>
+
+                   {/* 音频反馈 */}
+                   <button onClick={() => triggerUpload('audio')} className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${hasFeedback('audio') ? 'bg-green-50 border-green-200 text-green-600' : 'border-gray-200 text-gray-500'}`}>
+                      <Music size={16} /> {hasFeedback('audio') ? '音频已上传 (点击更换)' : '上传反馈音频'}
+                   </button>
                 </div>
+                {uploadingMedia && <p className="text-center text-xs text-blue-500 mt-2 animate-pulse">正在上传媒体文件...</p>}
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
-                <button onClick={handleSave} disabled={processingRefImage || uploadingMedia} className="flex-1 bg-green-600 text-white py-3 rounded-xl disabled:opacity-50 font-bold">
-                   {editingId ? '保存修改' : '創建規則'}
-                </button>
+                <button onClick={handleSave} disabled={uploadingMedia} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all">保存</button>
                 <button onClick={() => setViewMode('list')} className="flex-1 bg-gray-100 py-3 rounded-xl text-gray-600 font-bold">取消</button>
               </div>
            </div>
