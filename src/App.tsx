@@ -3,10 +3,10 @@ import { Camera, Upload, Settings, X, RefreshCw, Trash2, Plus, AlertCircle, Chec
 import * as storageService from './services/storageService';
 import * as localAiService from './services/geminiService';
 import * as mediaStore from './services/mediaStore';
-import { RecognitionRule, FeedbackType, TargetType, FeedbackConfig } from './types';
+import { RecognitionRule, FeedbackType, TargetType } from './types';
 import { GLOBAL_RULES } from './defaultRules';
 
-// 初始化本地数据
+// 初始化
 storageService.seedInitialData();
 
 type ViewState = 'home' | 'camera' | 'upload' | 'processing' | 'feedback' | 'admin-login' | 'admin';
@@ -19,18 +19,23 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [processingTime, setProcessingTime] = useState(0);
 
-  // 🔄 核心逻辑：加载规则（合并 全局规则 + 本地规则）
+  // 🔄 核心逻辑：从 Bmob 云端加载规则
   useEffect(() => {
-    const loadRules = () => {
-      const localRules = storageService.getRules();
-      // 合并逻辑：全局规则 + 本地规则 (排除ID冲突的)
-      const allRules = [...GLOBAL_RULES, ...localRules.filter(lr => !GLOBAL_RULES.find(gr => gr.id === lr.id))];
+    const loadRules = async () => {
+      // 1. 获取云端动态规则 (Bmob)
+      const cloudRules = await storageService.getRules();
+      
+      // 2. 合并全局代码规则 (GLOBAL_RULES)
+      // 逻辑：优先显示云端新加的规则，GLOBAL_RULES 作为保底
+      // 排除掉 ID 冲突的，以云端为准
+      const allRules = [...GLOBAL_RULES, ...cloudRules.filter(cr => !GLOBAL_RULES.find(gr => gr.id === cr.id))];
+      
       setRules(allRules);
     };
     
     loadRules();
     localAiService.loadModels();
-  }, [view]); // 每次切换视图重新加载，确保后台修改后主页能生效
+  }, [view]); // 每次切换视图重新拉取，确保数据最新
 
   const handleAnalyze = async (base64Img: string) => {
     setCapturedImage(base64Img);
@@ -40,7 +45,6 @@ export default function App() {
     const startTime = Date.now();
 
     try {
-      // 调用 AI 服务
       const matchedId = await localAiService.analyzeImageLocal(base64Img, rules);
       const endTime = Date.now();
       setProcessingTime((endTime - startTime) / 1000);
@@ -56,7 +60,7 @@ export default function App() {
       setErrorMsg("未找到匹配的目标");
       setView('feedback'); 
     } catch (err: any) {
-      setErrorMsg("分析出错，请检查网络或 Key 配置");
+      setErrorMsg("分析出错，请检查网络");
       console.error(err);
       setView('feedback');
     }
@@ -94,7 +98,7 @@ export default function App() {
                 <Camera className="w-12 h-12 text-blue-600" />
               </div>
               <p className="text-gray-800 text-2xl font-bold">准备扫描</p>
-              <p className="text-gray-500 text-sm">通义千问视觉引擎 (Qwen-VL) 已就绪</p>
+              <p className="text-gray-500 text-sm">通义千问 (Qwen) + Bmob 云端同步</p>
             </div>
             
             <div className="w-full space-y-4 max-w-xs">
@@ -107,7 +111,7 @@ export default function App() {
             </div>
             
             <div className="text-xs text-gray-400 mt-8 bg-gray-100 px-3 py-1 rounded-full">
-              当前已加载 {rules.length} 条识别规则
+              已加载 {rules.length} 条识别规则
             </div>
           </div>
         )}
@@ -147,7 +151,7 @@ export default function App() {
   );
 }
 
-// --- 子组件 (全中文汉化) ---
+// --- 子组件 ---
 
 const AdminLoginView = ({ onSuccess, onBack }: { onSuccess: () => void, onBack: () => void }) => {
   const [password, setPassword] = useState('');
@@ -310,12 +314,11 @@ const FeedbackView = ({ result, error, capturedImage, processingTime, onClose }:
   );
 };
 
-// 完整的后台管理面板（含规则增删改查）
+// 完整的后台管理面板 (适配 Bmob)
 const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () => void }) => {
   const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // 默认空规则
   const defaultRule: Partial<RecognitionRule> = { 
     targetType: 'image', 
     feedback: [{ type: 'text', content: '' }],
@@ -327,11 +330,10 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadType, setActiveUploadType] = useState<FeedbackType | null>(null);
 
-  // 开始编辑
   const startEdit = (rule: RecognitionRule) => {
-    // 如果是全局规则（ID以rule_开头），提示不能在本地改
+    // 如果是全局规则，提示去改代码
     if (rule.id.startsWith('rule_')) {
-      alert("这是全局规则，请通过修改 GitHub 代码来更新它。");
+      alert("这是【全局规则】，请通过修改 GitHub 源码来更新它。");
       return;
     }
     setEditingId(rule.id);
@@ -345,44 +347,50 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
     setViewMode('form');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formRule.name) return alert("请填写名称");
-    if (!formRule.targetValue) return alert("请填写识别目标描述");
+    if (!formRule.targetValue) return alert("请填写目标描述");
     
     const validFeedback = formRule.feedback?.filter(f => f.content.trim() !== '') || [];
     if (validFeedback.length === 0) return alert("请至少设置一个反馈内容");
 
     const rule: RecognitionRule = {
-      id: editingId || Date.now().toString(),
+      // Bmob 新增时 ID 留空，编辑时用现有 ID
+      id: editingId || '', 
       name: formRule.name,
       targetType: formRule.targetType as TargetType,
       targetValue: formRule.targetValue || '',
       feedback: validFeedback,
       createdAt: Date.now()
     };
-    storageService.saveRule(rule);
-    setViewMode('list');
+    
+    // 调用 storageService 上传到 Bmob
+    await storageService.saveRule(rule);
+    
+    // 延迟刷新一下
+    setTimeout(() => {
+       setViewMode('list');
+       onBack(); // 触发主页刷新
+    }, 500);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (id.startsWith('rule_')) {
       alert("全局规则无法删除");
       return;
     }
     if (confirm("确定要删除吗？")) {
-      storageService.deleteRule(id);
-      onBack(); // 强制刷新
+      await storageService.deleteRule(id);
+      onBack(); // 刷新
     }
   };
 
-  // 处理多媒体上传
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && activeUploadType) {
       setUploadingMedia(true);
       try {
         const id = await mediaStore.saveMedia(file);
-        // 更新表单中的反馈内容
         const currentFeedback = formRule.feedback || [];
         const exists = currentFeedback.find(f => f.type === activeUploadType);
         let newFeedback;
@@ -431,12 +439,12 @@ const AdminPanel = ({ rules, onBack }: { rules: RecognitionRule[], onBack: () =>
         {viewMode === 'list' && (
            <>
              <div className="bg-blue-50 p-4 rounded-xl mb-2 text-sm text-blue-800 shadow-sm border border-blue-100">
-                <p className="font-bold mb-1">📢 规则同步说明</p>
-                <p>下方列表包含 <span className="font-bold">全局规则</span> (代码内置) 和 <span className="font-bold">本地规则</span> (仅本机有效)。如需给所有用户添加规则，请修改代码中的 <code>defaultRules.ts</code>。</p>
+                <p className="font-bold mb-1">📢 云端同步说明</p>
+                <p>在此处新增的规则将保存到 <span className="font-bold">Bmob 云端</span>，所有用户都能同步看到！</p>
              </div>
 
              <button onClick={startAdd} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 flex items-center justify-center gap-2 font-bold hover:bg-gray-100 transition-colors">
-               <Plus /> 新增本地测试规则
+               <Plus /> 新增云端规则
              </button>
              
              {rules.map(rule => (
