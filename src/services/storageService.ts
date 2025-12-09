@@ -3,8 +3,8 @@ import { RecognitionRule } from '../types';
 
 // ============================================================
 // 🔴 必填：去 Bmob 后台复制你的 Secret Key 和 API 安全码
-const SECRET_KEY = "在这里填你的Secret Key";
-const SECURITY_CODE = "在这里填API安全码"; // 如果后台没显示，就留空字符串 ""
+const SECRET_KEY = "dbe4b8134d2a1071";
+const SECURITY_CODE = ""; // 如果后台没显示，就留空字符串 ""
 // ============================================================
 
 // 初始化 Bmob
