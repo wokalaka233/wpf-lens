@@ -1,113 +1,69 @@
-import * as tf from '@tensorflow/tfjs';
-import * as mobilenet from '@tensorflow-models/mobilenet';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import Tesseract from 'tesseract.js';
 import { RecognitionRule } from '../types';
 
-let mobilenetModel: mobilenet.MobileNet | null = null;
-let cocoModel: cocoSsd.ObjectDetection | null = null;
-let isLoading = false;
+// ==============================================================================
+// ✅ 已自动填入你的阿里云 API Key
+const ALI_API_KEY = "sk-2a663c4452024b0498044c4c8c31f66d"; 
+// ==============================================================================
 
-// 1. 同时加载两个 AI 模型
-export async function loadModels() {
-  if (mobilenetModel && cocoModel) return;
-  if (isLoading) return; // 防止重复加载
-  
-  isLoading = true;
-  console.log("🚀 正在启动双引擎 AI...");
-  
-  try {
-    await tf.ready();
-    
-    // 并行加载，速度更快
-    const [mNet, cSsd] = await Promise.all([
-      mobilenet.load({ version: 2, alpha: 1.0 }),
-      cocoSsd.load()
-    ]);
-    
-    mobilenetModel = mNet;
-    cocoModel = cSsd;
-    console.log("✅ MobileNet (识物) + COCO-SSD (识人) 全部就绪！");
-  } catch (e) {
-    console.error("❌ 模型加载失败:", e);
-  } finally {
-    isLoading = false;
-  }
-}
+// 通义千问的 API 地址 (兼容 OpenAI 格式)
+const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-// 辅助：图片转元素
-async function createImageElement(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = src;
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
-  });
-}
-
-// 2. 核心分析逻辑 (三层过滤)
+// 1. 核心分析函数 (连接阿里云 Qwen-VL)
 export async function analyzeImageLocal(base64Image: string, rules: RecognitionRule[]): Promise<string | null> {
-  const imgElement = await createImageElement(base64Image);
-  if (!mobilenetModel || !cocoModel) await loadModels();
-
-  // --- 第 1 层：OCR 文字识别 (专门用于区分不同的 CD/书) ---
-  const hasOCRRule = rules.some(r => r.targetType === 'ocr');
-  if (hasOCRRule) {
-    try {
-      console.log("📖 [1/3] 正在阅读文字...");
-      const { data: { text } } = await Tesseract.recognize(base64Image, 'eng');
-      console.log("OCR 结果:", text);
-      const ocrMatch = rules.find(r => 
-        r.targetType === 'ocr' && text.toLowerCase().includes(r.targetValue.toLowerCase())
-      );
-      if (ocrMatch) {
-        console.log(`✅ 文字匹配成功: ${ocrMatch.name}`);
-        return ocrMatch.id;
-      }
-    } catch(e) {}
+  
+  if (!ALI_API_KEY) {
+    alert("API Key 缺失！");
+    return null;
   }
 
-  // --- 第 2 层：COCO-SSD 检测 (专门找人、自行车、蛋糕) ---
-  if (cocoModel) {
-    try {
-      console.log("👥 [2/3] 正在扫描人类和常见物体...");
-      const detections = await cocoModel.detect(imgElement);
-      const detectedClasses = detections.map(d => d.class.toLowerCase());
-      console.log("COCO 看到了:", detectedClasses);
+  try {
+    console.log("🐼 正在呼叫通义千问 (Qwen-VL)...");
 
-      const cocoMatch = rules.find(r => {
-        if (r.targetType !== 'image') return false;
-        // 只要包含了规则里的词
-        return detectedClasses.some(cls => cls.includes(r.targetValue.toLowerCase()));
-      });
-      if (cocoMatch) {
-        console.log(`✅ COCO 匹配成功: ${cocoMatch.name}`);
-        return cocoMatch.id;
+    // 构建提示词：让 AI 做选择题
+    const prompt = `
+      你是一个视觉识别裁判。请判断这张图片是否符合以下规则中的任何一条。
+      
+      规则列表：
+      ${rules.map(r => `- ID: ${r.id}, 类型: ${r.targetType === 'ocr' ? '文字内容' : '物体描述'}, 目标: "${r.targetValue}"`).join('\n')}
+      
+      要求：
+      1. 仔细观察图片内容。
+      2. 如果图片符合某条规则的描述，请只返回该规则的 ID。
+      3. 如果都不符合，请返回 "null"。
+      4. 不要解释，不要多说话，直接给 ID。
+    `;
+
+    // 发送请求给阿里云
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${ALI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "qwen-vl-plus", // 使用通义千问 VL 增强版
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: base64Image } }
+            ]
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    // 错误处理
+    if (data.error) {
+      console.error("阿里云报错:", data.error);
+      if (data.error.code === 'AccessDenied') {
+        alert("请求被拒绝！请检查阿里云控制台是否配置了 CORS (跨域) 允许 *");
       }
-    } catch(e) { console.error(e); }
-  }
+      return null;
+    }
 
-  // --- 第 3 层：MobileNet 分类 (专门找生僻物体：台球杆、架子鼓) ---
-  if (mobilenetModel) {
-    try {
-      console.log("🎱 [3/3] 正在分析具体细节...");
-      const predictions = await mobilenetModel.classify(imgElement);
-      console.log("MobileNet 看到了:", predictions);
-
-      const mobileMatch = rules.find(r => {
-        if (r.targetType !== 'image') return false;
-        return predictions.some(p => p.className.toLowerCase().includes(r.targetValue.toLowerCase()));
-      });
-      if (mobileMatch) {
-        console.log(`✅ MobileNet 匹配成功: ${mobileMatch.name}`);
-        return mobileMatch.id;
-      }
-    } catch(e) { console.error(e); }
-  }
-
-  return null;
-}
-
-// ✅ 修复后的占位函数：接收一个参数但不使用它，防止 TS 报错
-export async function extractEmbedding(image: any) { return null; }
+    // 获取 AI 的回答
+    const a
