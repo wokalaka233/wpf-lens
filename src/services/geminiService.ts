@@ -5,9 +5,8 @@ import { RecognitionRule } from '../types';
 const ALI_API_KEY = "sk-2a663c4452024b0498044c4c8c31f66d"; 
 // ==============================================================================
 
-// 通义千问的 API 地址 (兼容 OpenAI 格式)
-const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-
+// 使用公共代理绕过 CORS 限制
+const API_URL = "https://cors-anywhere.herokuapp.com/https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 // 1. 核心分析函数 (连接阿里云 Qwen-VL)
 export async function analyzeImageLocal(base64Image: string, rules: RecognitionRule[]): Promise<string | null> {
   
