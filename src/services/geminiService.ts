@@ -66,4 +66,22 @@ export async function analyzeImageLocal(base64Image: string, rules: RecognitionR
     }
 
     // 获取 AI 的回答
-    const a
+    const aiText = data.choices?.[0]?.message?.content?.trim();
+    console.log("🐼 通义千问回答:", aiText);
+
+    if (!aiText || aiText === "null" || aiText.includes("null")) return null;
+
+    // 清洗结果，找到匹配的 ID
+    const matchedRule = rules.find(r => aiText.includes(r.id));
+    return matchedRule ? matchedRule.id : null;
+
+  } catch (e) {
+    console.error("网络请求失败:", e);
+    alert("网络错误，请检查网络连接");
+    return null;
+  }
+}
+
+// 占位函数 (为了兼容 App.tsx 的调用，不能删)
+export async function loadModels() { console.log("✅ 通义千问云端模式就绪"); }
+export async function extractEmbedding(image: any) { return null; }
