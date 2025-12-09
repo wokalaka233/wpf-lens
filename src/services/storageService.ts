@@ -2,9 +2,9 @@ import Bmob from "hydrogen-js-sdk";
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// 🔴 必填：去 Bmob 后台复制你的 Secret Key 和 API 安全码
+// 🔴 必填：请填入你在 Bmob 后台看到的 Secret Key 和 API 安全码
 const SECRET_KEY = "dbe4b8134d2a1071";
-const SECURITY_CODE = ""; // 如果后台没显示，就留空字符串 ""
+const SECURITY_CODE = "8bc6adffbb5746b030b46c7dd2afccac"; // 如果后台没显示，就留空字符串 ""
 // ============================================================
 
 // 初始化 Bmob
@@ -13,14 +13,14 @@ Bmob.initialize(SECRET_KEY, SECURITY_CODE);
 // 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
-    const query = Bmob.Query("rules");
-    query.order("-createdAt"); // 最新创建的在前面
+    // ⚡️ 修复点1：加 as any，防止 TS1062 报错
+    const query = Bmob.Query("rules") as any;
+    query.order("-createdAt"); 
     const res = await query.find();
     
     if (Array.isArray(res)) {
-      // Bmob 的数据结构转换
       return res.map((item: any) => ({
-        id: item.objectId, // Bmob 自动生成的唯一 ID
+        id: item.objectId, 
         name: item.name,
         targetType: item.targetType,
         targetValue: item.targetValue,
@@ -30,22 +30,23 @@ export async function getRules(): Promise<RecognitionRule[]> {
     }
     return [];
   } catch (e) {
-    console.error("获取规则失败:", e);
+    console.error("Bmob 获取失败:", e);
     return [];
   }
 }
 
 // 2. 保存规则 (新增)
 export async function saveRule(rule: RecognitionRule) {
-  const query = Bmob.Query("rules");
+  // ⚡️ 修复点2：加 as any
+  const query = Bmob.Query("rules") as any;
   
-  // 设置字段
   query.set("name", rule.name);
   query.set("targetType", rule.targetType);
   query.set("targetValue", rule.targetValue);
-  query.set("feedback", rule.feedback);
   
-  // Bmob 会自动处理新增
+  // ⚡️ 修复点3：加 as any，强行把数组存进去，防止 TS2345 报错
+  query.set("feedback", rule.feedback as any);
+  
   try {
     await query.save();
     console.log("✅ 规则已同步到云端");
@@ -57,7 +58,8 @@ export async function saveRule(rule: RecognitionRule) {
 
 // 3. 删除规则
 export async function deleteRule(id: string) {
-  const query = Bmob.Query("rules");
+  // ⚡️ 修复点4：加 as any
+  const query = Bmob.Query("rules") as any;
   try {
     await query.destroy(id);
   } catch (e) {
@@ -66,4 +68,4 @@ export async function deleteRule(id: string) {
 }
 
 export function seedInitialData() {}
-export function saveLog() {}
+export function saveLog(log: any) {}
