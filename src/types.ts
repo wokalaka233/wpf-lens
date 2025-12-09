@@ -12,10 +12,18 @@ export interface RecognitionRule {
   targetType: TargetType;
   targetValue: string; // OCR关键字 或 物体名称
   
-  // 🔴 注意下面这两个问号 ?，加上它就不会报错了
+  // 这里的问号 ? 必须保留
   embedding?: number[]; 
   similarityThreshold?: number; 
   
   feedback: FeedbackConfig[];
   createdAt: number;
+}
+
+// ✅ 这就是刚才缺少的“日志”定义，补上它就不报错了
+export interface RecognitionLog {
+  id: string;
+  timestamp: number;
+  matchedRuleId: string | null;
+  success: boolean;
 }
