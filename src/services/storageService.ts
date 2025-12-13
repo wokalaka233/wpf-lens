@@ -4,7 +4,7 @@ import { RecognitionRule } from '../types';
 // ============================================================
 // 🔴 必填：请填入你在 Bmob 后台看到的 Secret Key 和 API 安全码
 const SECRET_KEY = "dbe4b8134d2a1071";
-const SECURITY_CODE = "8bc6adffbb5746b030b46c7dd2afccac"; // 如果后台没显示，就留空字符串 ""
+const SECURITY_CODE = "c0e82c1541acfd409e0224565e625ebe"; // 如果后台没显示，就留空字符串 ""
 // ============================================================
 
 // 初始化 Bmob
