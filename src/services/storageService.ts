@@ -2,19 +2,19 @@ import Bmob from "hydrogen-js-sdk";
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// 🔴 请确认你的 Secret Key (从后台复制)
+// 🔴 这里的 Key 是根据你图1 填写的，绝对正确
 const SECRET_KEY = "dbe4b8134d2a1071"; 
-// 🔴 请确认你的 API 安全码 (后台没开就是空字符串)
+// 🔴 你的后台显示“API安全码”是【关闭】状态，所以这里必须留空！
 const SECURITY_CODE = ""; 
 // ============================================================
 
-// ⚡️ 关键修复：Bmob 初始化
-// 如果没有安全码，这就足够了
+// 初始化 Bmob
 Bmob.initialize(SECRET_KEY, SECURITY_CODE);
 
 // 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
+    // 加 as any 绕过类型检查
     const query = Bmob.Query("rules") as any;
     query.order("-createdAt"); 
     const res = await query.find();
@@ -32,7 +32,6 @@ export async function getRules(): Promise<RecognitionRule[]> {
     return [];
   } catch (e) {
     console.error("Bmob 获取失败:", e);
-    // 失败时不弹窗干扰用户，只返回空数组
     return [];
   }
 }
@@ -41,12 +40,9 @@ export async function getRules(): Promise<RecognitionRule[]> {
 export async function saveRule(rule: RecognitionRule) {
   const query = Bmob.Query("rules") as any;
   
-  // 设置字段
   query.set("name", rule.name);
   query.set("targetType", rule.targetType);
   query.set("targetValue", rule.targetValue);
-  
-  // 强制转换数组，防止类型报错
   query.set("feedback", rule.feedback as any);
   
   try {
@@ -54,11 +50,11 @@ export async function saveRule(rule: RecognitionRule) {
     console.log("✅ 规则已同步到云端");
   } catch (e: any) {
     console.error(e);
-    // 更加详细的错误提示
-    if (e.code === 401) {
-      alert("保存失败：Key 错误或未授权。请检查 Bmob 后台是否开启了 API 安全码？");
+    // 详细报错提示
+    if (e.code === 403 || e.error?.includes("Unauthorized")) {
+       alert("保存失败：权限不足。请检查 Bmob 后台 'rules' 表的权限设置，确保允许写入。");
     } else {
-      alert(`保存失败: ${e.error || "未知错误"}`);
+       alert(`保存失败: ${JSON.stringify(e)}`);
     }
   }
 }
