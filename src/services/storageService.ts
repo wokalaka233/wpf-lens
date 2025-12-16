@@ -2,14 +2,14 @@ import Bmob from "hydrogen-js-sdk";
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// 🔴 必填：你的 Secret Key (从截图看是这个)
+// 🔴 必填：你的 Secret Key
 const SECRET_KEY = "dbe4b8134d2a1071"; 
 // ============================================================
 
 // ⚡️⚡️ 关键修改 ⚡️⚡️
-// 我们只传一个参数！不要传第二个参数！
-// 这样 SDK 就不会发送 safeToken，从而避开 "为空" 的报错
-Bmob.initialize(SECRET_KEY);
+// 加了 (Bmob as any) 骗过编译器，强行只传一个参数！
+// 这样既能通过构建，又不会触发服务器的 safeToken 报错
+(Bmob as any).initialize(SECRET_KEY);
 
 // 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
