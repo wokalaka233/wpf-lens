@@ -1,13 +1,14 @@
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// ✅ 你的 Bmob 凭证 (保持不变)
+// ✅ 这里填的是你的 Application ID 和 REST API Key (已从你截图提取)
+// 这种连接方式不需要 "安全码"，绝对稳！
 const APP_ID = "3840e08f813e857d386c32148b5af56f";
 const REST_KEY = "c0e82c1541acfd409e0224565e625ebe";
 // ============================================================
 
+// Bmob 的 API 地址 (根据你之前的截图，你的节点是 api.codenow.cn)
 const BASE_URL = "https://api.codenow.cn/1/classes/rules";
-const FILE_URL = "https://api.codenow.cn/2/files"; // 文件上传接口
 
 const HEADERS = {
   "X-Bmob-Application-Id": APP_ID,
@@ -18,13 +19,17 @@ const HEADERS = {
 // 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
+    // 按创建时间倒序排列 (-createdAt)
     const response = await fetch(`${BASE_URL}?order=-createdAt`, {
       method: "GET",
       headers: HEADERS
     });
-    if (!response.ok) return [];
+    
+    if (!response.ok) throw new Error("Network response was not ok");
+    
     const data = await response.json();
     
+    // Bmob REST API 返回的数据在 results 字段里
     if (data.results && Array.isArray(data.results)) {
       return data.results.map((item: any) => ({
         id: item.objectId, 
@@ -42,8 +47,9 @@ export async function getRules(): Promise<RecognitionRule[]> {
   }
 }
 
-// 2. 保存规则
+// 2. 保存规则 (新增)
 export async function saveRule(rule: RecognitionRule) {
+  // 构造要发送的数据 (不需要发 objectId，服务器会生成)
   const payload = {
     name: rule.name,
     targetType: rule.targetType,
@@ -52,19 +58,22 @@ export async function saveRule(rule: RecognitionRule) {
   };
 
   try {
-    // 简化逻辑：这里我们只处理新增，不处理复杂的修改，确保 ID 一致性
     const response = await fetch(BASE_URL, {
       method: "POST",
       headers: HEADERS,
       body: JSON.stringify(payload)
     });
+
     const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    console.log("✅ 规则已同步");
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    console.log("✅ 规则已通过 REST API 同步");
   } catch (e: any) {
     console.error(e);
-    alert(`保存规则失败: ${e.message || "网络错误"}`);
-    throw e; // 抛出错误让前端停止 loading
+    alert(`保存失败: ${e.message || "未知错误"}`);
   }
 }
 
@@ -80,36 +89,6 @@ export async function deleteRule(id: string) {
   }
 }
 
-// 🚀 新增：上传文件到 Bmob 云存储
-export async function uploadFile(file: File): Promise<string> {
-  const fileName = encodeURIComponent(file.name);
-  
-  try {
-    // Bmob 文件上传 API
-    const response = await fetch(`${FILE_URL}/${fileName}`, {
-      method: "POST",
-      headers: {
-        "X-Bmob-Application-Id": APP_ID,
-        "X-Bmob-REST-API-Key": REST_KEY,
-        "Content-Type": file.type // 自动识别文件类型
-      },
-      body: file // 直接发送文件二进制数据
-    });
-
-    const data = await response.json();
-    
-    if (data.url) {
-      // 这里的 url 是 http，为了兼容性最好转成 https
-      return data.url.replace("http://", "https://");
-    } else {
-      throw new Error("上传失败，未返回 URL");
-    }
-  } catch (e: any) {
-    console.error("文件上传出错:", e);
-    alert("文件上传失败，请检查文件大小（建议小于 10MB）");
-    throw e;
-  }
-}
-
+// 占位函数
 export function seedInitialData() {}
 export function saveLog(log: any) {}
