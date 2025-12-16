@@ -2,19 +2,18 @@ import Bmob from "hydrogen-js-sdk";
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// 🔴 这里的 Key 是根据你图1 填写的，绝对正确
+// 🔴 必填：你的 Secret Key (从截图看是这个)
 const SECRET_KEY = "dbe4b8134d2a1071"; 
-// 🔴 你的后台显示“API安全码”是【关闭】状态，所以这里必须留空！
-const SECURITY_CODE = ""; 
 // ============================================================
 
-// 初始化 Bmob
-Bmob.initialize(SECRET_KEY, SECURITY_CODE);
+// ⚡️⚡️ 关键修改 ⚡️⚡️
+// 我们只传一个参数！不要传第二个参数！
+// 这样 SDK 就不会发送 safeToken，从而避开 "为空" 的报错
+Bmob.initialize(SECRET_KEY);
 
 // 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
-    // 加 as any 绕过类型检查
     const query = Bmob.Query("rules") as any;
     query.order("-createdAt"); 
     const res = await query.find();
@@ -50,12 +49,7 @@ export async function saveRule(rule: RecognitionRule) {
     console.log("✅ 规则已同步到云端");
   } catch (e: any) {
     console.error(e);
-    // 详细报错提示
-    if (e.code === 403 || e.error?.includes("Unauthorized")) {
-       alert("保存失败：权限不足。请检查 Bmob 后台 'rules' 表的权限设置，确保允许写入。");
-    } else {
-       alert(`保存失败: ${JSON.stringify(e)}`);
-    }
+    alert(`保存失败: ${JSON.stringify(e)}`);
   }
 }
 
