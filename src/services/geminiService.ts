@@ -1,49 +1,41 @@
 import { RecognitionRule } from '../types';
 
 // ==============================================================================
-// ✅ 已填入你的阿里云 API Key (通义千问)
+// 阿里云 Key
 const ALI_API_KEY = "sk-2a663c4452024b0498044c4c8c31f66d"; 
 // ==============================================================================
 
-// 使用公共代理绕过阿里云的 CORS 限制 (必加，否则手机网页会报错)
-const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
+// ⚠️ 调试重点：我们先去掉代理，尝试直连！看看到底是不是代理的问题
+// 如果直连报错 CORS，我们再换回代理。
 const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-// 1. 核心分析函数
 export async function analyzeImageLocal(base64Image: string, rules: RecognitionRule[]): Promise<string | null> {
   
-  if (!ALI_API_KEY) {
-    alert("API Key 缺失！");
-    return null;
-  }
+  // 1. 弹窗测试：证明函数跑起来了
+  // alert("步骤1: 开始分析..."); 
 
   try {
-    console.log("🐼 正在呼叫通义千问 (Qwen-VL)...");
-
-    // 构建提示词：让 AI 做中文裁判
     const prompt = `
-      你是一个视觉识别裁判。请判断这张图片是否符合以下规则中的任何一条。
-      
+      你是一个视觉识别裁判。
       规则列表：
-      ${rules.map(r => `- ID: ${r.id}, 类型: ${r.targetType === 'ocr' ? '包含文字' : '包含物体'}, 目标描述: "${r.targetValue}"`).join('\n')}
+      ${rules.map(r => `- ID: ${r.id}, 目标: "${r.targetValue}"`).join('\n')}
       
       要求：
-      1. 仔细观察图片内容。
-      2. 如果图片符合某条规则的描述（即使目标值是英文，只要画面里有这个东西就算），请只返回该规则的 ID。
-      3. 如果都不符合，请返回 "null"。
-      4. 不要解释，不要多说话，直接给 ID。
+      1. 仔细看图。
+      2. 如果图片包含规则里的目标，只返回该规则的 ID。
+      3. 如果都不匹配，请返回 "NO_MATCH: 原因"。
+      4. 不要解释。
     `;
 
-    // 发送请求
-    const response = await fetch(PROXY_URL + API_URL, {
+    // 2. 发送请求
+    const response = await fetch(API_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${ALI_API_KEY}`,
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest" // 代理服务需要这个头
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "qwen-vl-plus", // 使用通义千问 VL 增强版
+        model: "qwen-vl-plus", 
         messages: [
           {
             role: "user",
@@ -56,34 +48,47 @@ export async function analyzeImageLocal(base64Image: string, rules: RecognitionR
       })
     });
 
-    const data = await response.json();
-
-    // 错误处理
-    if (data.error) {
-      console.error("阿里云报错:", data.error);
+    // 3. 检查网络状态
+    if (!response.ok) {
+      const errText = await response.text();
+      alert(`❌ 网络错误: ${response.status}\n详细信息: ${errText.slice(0, 100)}`);
       return null;
     }
 
-    // 获取 AI 的回答
-    const aiText = data.choices?.[0]?.message?.content?.trim();
-    console.log("🐼 通义千问回答:", aiText);
+    const data = await response.json();
 
-    if (!aiText || aiText === "null" || aiText.includes("null")) return null;
-
-    // 匹配 ID
-    const matchedRule = rules.find(r => aiText.includes(r.id));
-    return matchedRule ? matchedRule.id : null;
-
-  } catch (e) {
-    console.error("请求失败:", e);
-    // 第一次使用代理可能需要激活，这里给个友好提示
-    if (e.toString().includes("403")) {
-      alert("请先访问 https://cors-anywhere.herokuapp.com/corsdemo 点击按钮激活代理服务（开发者只需做一次）");
+    // 4. 检查阿里云返回
+    if (data.error) {
+      alert(`❌ 阿里云报错: ${data.error.message}`);
+      return null;
     }
+
+    const aiText = data.choices?.[0]?.message?.content?.trim();
+    
+    // 5. ⭐️ 关键弹窗：看看 AI 到底说了什么！
+    alert(`🤖 AI说: [${aiText}]`);
+
+    if (!aiText || aiText.includes("NO_MATCH")) return null;
+
+    // 尝试匹配 ID
+    const matchedRule = rules.find(r => aiText.includes(r.id));
+    
+    if (matchedRule) {
+      return matchedRule.id;
+    } else {
+      // 如果 AI 说了一堆话但没报 ID，尝试模糊匹配
+      const fuzzyMatch = rules.find(r => aiText.includes(r.targetValue));
+      if (fuzzyMatch) return fuzzyMatch.id;
+      
+      alert(`⚠️ 匹配失败。AI虽然回答了，但没对上 ID。`);
+      return null;
+    }
+
+  } catch (e: any) {
+    alert(`💥 程序崩溃: ${e.message}`);
     return null;
   }
 }
 
-// 兼容代码
-export async function loadModels() { console.log("云端模式就绪"); }
-export async function extractEmbedding(image: any) { return null; }
+export async function loadModels() {}
+export async function extractEmbedding() { return null; }
