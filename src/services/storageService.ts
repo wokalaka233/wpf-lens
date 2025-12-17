@@ -1,13 +1,15 @@
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// Bmob 凭证 (已确认可用)
+// Bmob 凭证 (保持不变)
 const APP_ID = "3840e08f813e857d386c32148b5af56f";
 const REST_KEY = "c0e82c1541acfd409e0224565e625ebe";
 // ============================================================
 
+// ⚡️ 数据 API 地址
 const BASE_URL = "https://api.codenow.cn/1/classes/rules";
-const FILE_URL = "https://api.codenow.cn/2/files";
+// ⚡️ 文件 API 地址 (改成官方主域名，更稳定)
+const FILE_URL = "https://api.bmobcloud.com/2/files";
 
 const HEADERS = {
   "X-Bmob-Application-Id": APP_ID,
@@ -31,7 +33,6 @@ export async function getRules(): Promise<RecognitionRule[]> {
         name: item.name,
         targetType: item.targetType,
         targetValue: item.targetValue,
-        // 🛡️ 强力清洗：确保所有链接都是 HTTPS
         feedback: (item.feedback || []).map((fb: any) => ({
           ...fb,
           content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
@@ -51,7 +52,6 @@ export async function saveRule(rule: RecognitionRule) {
     name: rule.name,
     targetType: rule.targetType,
     targetValue: rule.targetValue,
-    // 🛡️ 保存时也清洗一遍
     feedback: rule.feedback.map(fb => ({
       ...fb,
       content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
@@ -64,11 +64,14 @@ export async function saveRule(rule: RecognitionRule) {
       headers: HEADERS,
       body: JSON.stringify(payload)
     });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
+    
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "保存失败");
+    }
     console.log("✅ 规则已同步");
   } catch (e: any) {
-    alert(`保存失败: ${e.message || "网络错误"}`);
+    alert(`保存失败: ${e.message}`);
     throw e;
   }
 }
@@ -78,12 +81,14 @@ export async function deleteRule(id: string) {
   try { await fetch(`${BASE_URL}/${id}`, { method: "DELETE", headers: HEADERS }); } catch (e) {}
 }
 
-// 4. 上传文件 (最关键的一步)
+// 4. 上传文件 (修复版)
 export async function uploadFile(file: File): Promise<string> {
-  const fileName = encodeURIComponent(file.name);
+  // 🛡️ 自动重命名：防止中文文件名导致上传失败
+  const extension = file.name.split('.').pop() || 'jpg';
+  const safeFileName = `file_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
   
   try {
-    const response = await fetch(`${FILE_URL}/${fileName}`, {
+    const response = await fetch(`${FILE_URL}/${safeFileName}`, {
       method: "POST",
       headers: {
         "X-Bmob-Application-Id": APP_ID,
@@ -93,20 +98,24 @@ export async function uploadFile(file: File): Promise<string> {
       body: file
     });
 
+    if (!response.ok) {
+        // 如果失败，读取详细错误信息并弹窗
+        const errText = await response.text();
+        throw new Error(`Status: ${response.status}, Error: ${errText}`);
+    }
+
     const data = await response.json();
     
     if (data.url) {
-      let finalUrl = data.url;
-      // 🛡️ 强制 HTTPS 转换
-      if (finalUrl.startsWith('http://')) {
-        finalUrl = finalUrl.replace('http://', 'https://');
-      }
-      return finalUrl;
+      // 强制转 https
+      return data.url.replace("http://", "https://");
     } else {
-      throw new Error("上传失败");
+      throw new Error("上传成功但未返回链接");
     }
   } catch (e: any) {
-    alert("文件上传失败，请重试");
+    console.error("上传出错:", e);
+    // 弹窗显示具体错误，方便调试
+    alert(`文件上传失败: ${e.message}`);
     throw e;
   }
 }
