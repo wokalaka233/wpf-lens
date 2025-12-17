@@ -1,7 +1,7 @@
 import { RecognitionRule } from '../types';
 
 // ============================================================
-// 你的 Bmob 凭证
+// Bmob 凭证 (已确认可用)
 const APP_ID = "3840e08f813e857d386c32148b5af56f";
 const REST_KEY = "c0e82c1541acfd409e0224565e625ebe";
 // ============================================================
@@ -15,6 +15,7 @@ const HEADERS = {
   "Content-Type": "application/json"
 };
 
+// 1. 获取云端规则
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
     const response = await fetch(`${BASE_URL}?order=-createdAt`, {
@@ -23,16 +24,17 @@ export async function getRules(): Promise<RecognitionRule[]> {
     });
     if (!response.ok) return [];
     const data = await response.json();
+    
     if (data.results && Array.isArray(data.results)) {
       return data.results.map((item: any) => ({
         id: item.objectId, 
         name: item.name,
         targetType: item.targetType,
         targetValue: item.targetValue,
-        // ⚡️ 读取时：强制 http -> https
+        // 🛡️ 强力清洗：确保所有链接都是 HTTPS
         feedback: (item.feedback || []).map((fb: any) => ({
           ...fb,
-          content: fb.content && fb.content.startsWith('http:') ? fb.content.replace('http:', 'https:') : fb.content
+          content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
         })), 
         createdAt: new Date(item.createdAt).getTime()
       }));
@@ -43,34 +45,43 @@ export async function getRules(): Promise<RecognitionRule[]> {
   }
 }
 
+// 2. 保存规则
 export async function saveRule(rule: RecognitionRule) {
   const payload = {
     name: rule.name,
     targetType: rule.targetType,
     targetValue: rule.targetValue,
-    // ⚡️ 保存时：强制 http -> https
+    // 🛡️ 保存时也清洗一遍
     feedback: rule.feedback.map(fb => ({
       ...fb,
-      content: fb.content && fb.content.startsWith('http:') ? fb.content.replace('http:', 'https:') : fb.content
+      content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
     }))
   };
+
   try {
-    await fetch(BASE_URL, {
+    const response = await fetch(BASE_URL, {
       method: "POST",
       headers: HEADERS,
       body: JSON.stringify(payload)
     });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    console.log("✅ 规则已同步");
   } catch (e: any) {
-    alert(`保存失败: ${e.message}`);
+    alert(`保存失败: ${e.message || "网络错误"}`);
+    throw e;
   }
 }
 
+// 3. 删除规则
 export async function deleteRule(id: string) {
   try { await fetch(`${BASE_URL}/${id}`, { method: "DELETE", headers: HEADERS }); } catch (e) {}
 }
 
+// 4. 上传文件 (最关键的一步)
 export async function uploadFile(file: File): Promise<string> {
   const fileName = encodeURIComponent(file.name);
+  
   try {
     const response = await fetch(`${FILE_URL}/${fileName}`, {
       method: "POST",
@@ -81,10 +92,16 @@ export async function uploadFile(file: File): Promise<string> {
       },
       body: file
     });
+
     const data = await response.json();
+    
     if (data.url) {
-      // ⚡️ 上传后：强制返回 https 链接
-      return data.url.replace("http://", "https://");
+      let finalUrl = data.url;
+      // 🛡️ 强制 HTTPS 转换
+      if (finalUrl.startsWith('http://')) {
+        finalUrl = finalUrl.replace('http://', 'https://');
+      }
+      return finalUrl;
     } else {
       throw new Error("上传失败");
     }
