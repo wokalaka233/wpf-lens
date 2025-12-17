@@ -3,18 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <!-- 禁止手机缩放 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    
     <title>wpf的镜头</title>
 
-    <!-- 🔥🔥🔥 核心修复：这两行代码是救命稻草 🔥🔥🔥 -->
-    <!-- 1. 强制把 http 图片变成 https，解决“混合内容”拦截 -->
+    <!-- 🔥🔥🔥 核心修复：这两行是解决图片不显示的救命稻草 🔥🔥🔥 -->
+    <!-- 1. 强制将所有 http 请求升级为 https (解决混合内容报错) -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
-    <!-- 2. 隐藏请求来源，解决 Bmob 的防盗链拦截 (403错误) -->
+    <!-- 2. 彻底隐藏请求来源 (解决 403 Forbidden 防盗链) -->
     <meta name="referrer" content="no-referrer" />
     
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body>
