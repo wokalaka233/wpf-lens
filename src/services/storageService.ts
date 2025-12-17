@@ -6,10 +6,9 @@ const APP_ID = "3840e08f813e857d386c32148b5af56f";
 const REST_KEY = "c0e82c1541acfd409e0224565e625ebe";
 // ============================================================
 
-// ⚡️ 数据 API 地址
+// ⚡️ 统一使用 codenow.cn 域名 (你的账号属于这个集群)
 const BASE_URL = "https://api.codenow.cn/1/classes/rules";
-// ⚡️ 文件 API 地址 (改成官方主域名，更稳定)
-const FILE_URL = "https://api.bmobcloud.com/2/files";
+const FILE_URL = "https://api.codenow.cn/2/files";
 
 const HEADERS = {
   "X-Bmob-Application-Id": APP_ID,
@@ -35,7 +34,8 @@ export async function getRules(): Promise<RecognitionRule[]> {
         targetValue: item.targetValue,
         feedback: (item.feedback || []).map((fb: any) => ({
           ...fb,
-          content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
+          // 强力修复 HTTPS
+          content: fb.content && fb.content.startsWith('http:') ? fb.content.replace('http:', 'https:') : fb.content
         })), 
         createdAt: new Date(item.createdAt).getTime()
       }));
@@ -54,7 +54,7 @@ export async function saveRule(rule: RecognitionRule) {
     targetValue: rule.targetValue,
     feedback: rule.feedback.map(fb => ({
       ...fb,
-      content: fb.content && fb.content.startsWith('http') ? fb.content.replace(/^http:\/\//i, 'https://') : fb.content
+      content: fb.content && fb.content.startsWith('http:') ? fb.content.replace('http:', 'https:') : fb.content
     }))
   };
 
@@ -81,9 +81,9 @@ export async function deleteRule(id: string) {
   try { await fetch(`${BASE_URL}/${id}`, { method: "DELETE", headers: HEADERS }); } catch (e) {}
 }
 
-// 4. 上传文件 (修复版)
+// 4. 上传文件 (最终修复版)
 export async function uploadFile(file: File): Promise<string> {
-  // 🛡️ 自动重命名：防止中文文件名导致上传失败
+  // 🛡️ 必须保留：自动重命名 (防止中文名报错)
   const extension = file.name.split('.').pop() || 'jpg';
   const safeFileName = `file_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
   
@@ -99,22 +99,29 @@ export async function uploadFile(file: File): Promise<string> {
     });
 
     if (!response.ok) {
-        // 如果失败，读取详细错误信息并弹窗
         const errText = await response.text();
         throw new Error(`Status: ${response.status}, Error: ${errText}`);
     }
 
     const data = await response.json();
     
+    // 🔍 调试输出：如果失败，我们可以看到返回了什么
+    console.log("Upload response:", data);
+
     if (data.url) {
-      // 强制转 https
       return data.url.replace("http://", "https://");
+    } else if (data.cdn) {
+      // 有些节点返回的是 cdn 字段而不是 url
+      return data.cdn.replace("http://", "https://");
+    } else if (data.filename) {
+      // 如果只有文件名，尝试手动拼接 (最后的保底)
+      return `https://bmob-cdn-335540.bmobcloud.com/${data.filename}`;
     } else {
-      throw new Error("上传成功但未返回链接");
+      // 抛出完整数据以便调试
+      throw new Error(`上传成功但无链接，返回数据: ${JSON.stringify(data)}`);
     }
   } catch (e: any) {
     console.error("上传出错:", e);
-    // 弹窗显示具体错误，方便调试
     alert(`文件上传失败: ${e.message}`);
     throw e;
   }
