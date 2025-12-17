@@ -3,20 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    
-    <!-- 禁止手机缩放，让APP体验更好 -->
+    <!-- 禁止手机缩放 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
-    <!-- ✅ 这里是你要求的标题 -->
     <title>wpf的镜头</title>
+
+    <!-- 🔥🔥🔥 核心修复：这两行代码是救命稻草 🔥🔥🔥 -->
+    <!-- 1. 强制把 http 图片变成 https，解决“混合内容”拦截 -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+    <!-- 2. 隐藏请求来源，解决 Bmob 的防盗链拦截 (403错误) -->
+    <meta name="referrer" content="no-referrer" />
     
-    <!-- 引入 Tailwind CSS (让你的界面变漂亮) -->
+    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body>
     <div id="root"></div>
-    
-    <!-- ✅ 正确的入口：指向 src 里的 main.tsx -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
