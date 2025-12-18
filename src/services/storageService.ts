@@ -1,24 +1,28 @@
 import { RecognitionRule } from '../types';
-import OSS from 'ali-oss'; // 👈 必须引入这个
+import OSS from 'ali-oss';
 
 // ============================================================
-// 1. Bmob 配置 (保持不变，用于存规则数据)
+// 1. Bmob 配置 (用于存规则数据 - REST API 模式)
+// ✅ 这些是你的 Bmob 凭证 (已帮你填好)
 const BMOB_APP_ID = "3840e08f813e857d386c32148b5af56f";
 const BMOB_REST_KEY = "c0e82c1541acfd409e0224565e625ebe";
 const BMOB_URL = "https://api.codenow.cn/1/classes/rules";
 
-// 2. 阿里云 OSS 配置 (用于存图片/视频)
-// 🔴 请填入你刚才申请的 RAM 子账号 AccessKey
+// 2. 阿里云 OSS 配置 (用于存图片/视频/音频)
+// 🔴 请务必填入你刚才新建的 RAM 子账号 Key！
 const OSS_CONFIG = {
-  region: 'oss-cn-beijing', // 你的 Bucket 地域 (北京)
-  accessKeyId: 'LTAI5tGejP9rVNLb6LRvuJLi',     // 👈 填这里！
-  accessKeySecret: '5wn9FkPBUMPSO4lJ2vonqvWyvxLqN8', // 👈 填这里！
+  region: 'oss-cn-beijing', // 你的 Bucket 在北京
+  
+  // 👇👇👇 在这里粘贴你刚才复制的新 Key 👇👇👇
+  accessKeyId: 'LTAI5tAVY1LooY7xuvFLR4rh',
+  accessKeySecret: 'plnfyWnwgyHmrBQXao9NwYmjl4Olxq',
+  
   bucket: 'wpf-lens-images', // 你的 Bucket 名字
-  secure: true // 强制 HTTPS
+  secure: true // 强制使用 HTTPS
 };
 // ============================================================
 
-// 初始化 OSS
+// 初始化 OSS 客户端
 const client = new OSS(OSS_CONFIG);
 
 const HEADERS = {
@@ -27,7 +31,7 @@ const HEADERS = {
   "Content-Type": "application/json"
 };
 
-// 1. 获取规则 (从 Bmob)
+// 1. 获取规则 (从 Bmob 获取)
 export async function getRules(): Promise<RecognitionRule[]> {
   try {
     const response = await fetch(`${BMOB_URL}?order=-createdAt`, {
@@ -43,7 +47,7 @@ export async function getRules(): Promise<RecognitionRule[]> {
         name: item.name,
         targetType: item.targetType,
         targetValue: item.targetValue,
-        // 强制 HTTPS
+        // 确保所有反馈链接都是 HTTPS
         feedback: (item.feedback || []).map((fb: any) => ({
           ...fb,
           content: fb.content && fb.content.startsWith('http:') ? fb.content.replace('http:', 'https:') : fb.content
@@ -57,7 +61,7 @@ export async function getRules(): Promise<RecognitionRule[]> {
   }
 }
 
-// 2. 保存规则 (到 Bmob)
+// 2. 保存规则 (保存到 Bmob)
 export async function saveRule(rule: RecognitionRule) {
   const payload = {
     name: rule.name,
@@ -77,21 +81,22 @@ export async function saveRule(rule: RecognitionRule) {
         const err = await response.json();
         throw new Error(err.error || "保存失败");
     }
-    console.log("✅ 规则已同步");
+    console.log("✅ 规则已同步到 Bmob");
   } catch (e: any) {
     alert(`保存失败: ${e.message}`);
     throw e;
   }
 }
 
+// 3. 删除规则
 export async function deleteRule(id: string) {
   try { await fetch(`${BMOB_URL}/${id}`, { method: "DELETE", headers: HEADERS }); } catch (e) {}
 }
 
-// 3. 上传文件 (🚀 改用阿里云 OSS，彻底解决 10007 错误)
+// 4. 上传文件 (🚀 发送到阿里云 OSS)
 export async function uploadFile(file: File): Promise<string> {
   try {
-    // 随机文件名
+    // 生成随机文件名，防止重名
     const extension = file.name.split('.').pop() || 'tmp';
     const fileName = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
 
@@ -100,15 +105,16 @@ export async function uploadFile(file: File): Promise<string> {
     // 直传阿里云
     const result = await client.put(fileName, file);
     
-    // 返回 HTTPS 链接
+    // 返回 URL
     if (result && result.url) {
+      // 强制确保是 https
       return result.url.replace("http://", "https://");
     } else {
-      throw new Error("OSS 上传未返回链接");
+      throw new Error("OSS 上传成功但未返回链接");
     }
   } catch (e: any) {
     console.error("OSS 上传失败:", e);
-    alert(`文件上传失败: ${e.message || "请检查 OSS 配置"}`);
+    alert(`文件上传失败: ${e.message || "请检查 OSS 配置或网络"}`);
     throw e;
   }
 }
