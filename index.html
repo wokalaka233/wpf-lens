@@ -4,34 +4,25 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>wpf-lens 后台管理</title>
+    <title>wpf的镜头</title>
 
-    <!-- 1. 核心安全策略：解决混合内容加载失败 -->
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
-    
-    <!-- 2. 核心避坑：绕过阿里云/Bmob 的防盗链 403 错误 -->
+    <!-- 🛑 核心修复 1：解决别人看不见图片的“防盗链”问题 -->
     <meta name="referrer" content="no-referrer" />
+    <!-- 🛑 核心修复 2：解决 HTTPS 环境下 http 图片无法加载的问题 -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
 
-    <!-- 3. [救命补丁] 解决 ali-oss 在 Vite/浏览器环境缺少 Buffer 的崩溃问题 -->
-    <script>
-      window.global = window;
-    </script>
+    <!-- [补丁] 解决 ali-oss SDK 运行必需的环境变量，不影响 UI -->
+    <script>window.global = window;</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
-    <script>
-      // 必须在所有业务代码加载前把 Buffer 挂载到全局
-      window.Buffer = window.Buffer || buffer.Buffer;
-    </script>
+    <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
 
-    <!-- 4. [调试利器] 手机端 vConsole (如果你现在页面已经不白屏了，可以注释掉它) -->
+    <!-- [调试器] vConsole 方便你查错，稳定后你可以自己删掉 -->
     <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-    <script>
-      var vConsole = new window.VConsole();
-    </script>
+    <script>new window.VConsole();</script>
     
-    <!-- 使用 Tailwind CDN 快速渲染 UI -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body class="bg-gray-50">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
