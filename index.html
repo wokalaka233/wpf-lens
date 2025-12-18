@@ -4,32 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>wpf的镜头</title>
+    <title>wpf-lens 后台管理</title>
 
-    <!-- 1. 强制将所有 http 请求升级为 https (解决混合内容报错) -->
+    <!-- 1. 核心安全策略：解决混合内容加载失败 -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
-    <!-- 2. 彻底隐藏请求来源 (解决 403 Forbidden 阿里云防盗链) -->
+    
+    <!-- 2. 核心避坑：绕过阿里云/Bmob 的防盗链 403 错误 -->
     <meta name="referrer" content="no-referrer" />
 
-    <!-- [补丁] 解决 ali-oss 在 Vite 中的兼容性报错 (Buffer is not defined) -->
+    <!-- 3. [救命补丁] 解决 ali-oss 在 Vite/浏览器环境缺少 Buffer 的崩溃问题 -->
     <script>
       window.global = window;
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
     <script>
+      // 必须在所有业务代码加载前把 Buffer 挂载到全局
       window.Buffer = window.Buffer || buffer.Buffer;
     </script>
 
-    <!-- [调试器] 手机端调试神器 vConsole，上线稳定后可以删掉 -->
+    <!-- 4. [调试利器] 手机端 vConsole (如果你现在页面已经不白屏了，可以注释掉它) -->
     <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
     <script>
-      // 只有在手机端访问或特定域名下才初始化
       var vConsole = new window.VConsole();
     </script>
     
+    <!-- 使用 Tailwind CDN 快速渲染 UI -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
+  <body class="bg-gray-50">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
