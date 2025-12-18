@@ -6,23 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>wpf的镜头</title>
 
-    <!-- 🛑 核心修复 1：解决别人看不见图片的“防盗链”问题 -->
-    <meta name="referrer" content="no-referrer" />
-    <!-- 🛑 核心修复 2：解决 HTTPS 环境下 http 图片无法加载的问题 -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+    <meta name="referrer" content="no-referrer" />
 
-    <!-- [补丁] 解决 ali-oss SDK 运行必需的环境变量，不影响 UI -->
+    <!-- 解决 ali-oss SDK 环境依赖 -->
     <script>window.global = window;</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
     <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
-
-    <!-- [调试器] vConsole 方便你查错，稳定后你可以自己删掉 -->
-    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-    <script>new window.VConsole();</script>
     
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
+  <body class="bg-gray-50">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
