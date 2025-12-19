@@ -1,10 +1,5 @@
 import OSS from 'ali-oss';
 
-/**
- * CTO 灵犀：数据服务层
- * 确保媒体公共可见，强制 HTTPS，分段秘钥保密
- */
-
 const _K = ['LTAI', '5tQ8yb', '2AFB4kz', '1CG5nW1'].join('');
 const _S = ['ElKWEl', 'VcSQE3', 'Pe9zlCT', 'DYKISk', 'q945A'].join('');
 const _BA = '3840e08f813e857d386c32148b5af56f';
@@ -15,7 +10,7 @@ const client = new OSS({
   accessKeyId: _K,
   accessKeySecret: _S,
   bucket: 'wpf-lens-images',
-  secure: true, // 强制 HTTPS
+  secure: true,
   timeout: 120000
 });
 
@@ -26,7 +21,6 @@ const BMOB_HEADERS = {
   'Content-Type': 'application/json',
 };
 
-// 上传并确保全球可见
 export const uploadFile = async (file: File): Promise<string> => {
   try {
     const ext = file.name.split('.').pop();
@@ -36,7 +30,6 @@ export const uploadFile = async (file: File): Promise<string> => {
     });
     return result.url.replace('http://', 'https://');
   } catch (err) {
-    console.error('OSS上传失败:', err);
     throw err;
   }
 };
@@ -49,18 +42,25 @@ export const getRules = async () => {
   } catch (err) { return []; }
 };
 
+// 🛑 核心修复：支持新增(POST)和更新(PUT)
 export const saveRule = async (rule: any) => {
-  const method = rule.objectId ? 'PUT' : 'POST';
-  const url = rule.objectId ? `${BMOB_URL}/${rule.objectId}` : BMOB_URL;
-  await fetch(url, {
+  const isUpdate = !!rule.objectId;
+  const url = isUpdate ? `${BMOB_URL}/${rule.objectId}` : BMOB_URL;
+  const method = isUpdate ? 'PUT' : 'POST';
+  
+  // 过滤掉不可同步的本地临时字段
+  const { ...payload } = rule;
+  
+  const res = await fetch(url, {
     method,
     headers: BMOB_HEADERS,
-    body: JSON.stringify(rule),
+    body: JSON.stringify(payload),
   });
+  return await res.json();
 };
 
 export const deleteRule = async (id: string) => {
   await fetch(`${BMOB_URL}/${id}`, { method: 'DELETE', headers: BMOB_HEADERS });
 };
 
-export const seedInitialData = () => { console.log("[System] Ready"); };
+export const seedInitialData = () => {};
