@@ -7,34 +7,41 @@ export async function analyzeImageLocal(base64Image: string, rules: RecognitionR
   if (!ALI_API_KEY) return null;
 
   try {
-    // 🛑 核心升级：同时把规则的文字描述和参考图链接喂给 AI
     const ruleContext = rules.map((r, i) => {
-      let desc = `规则${i+1}: [ID: ${r.objectId || r.id}], 核心名称: "${r.name}", 文字特征: "${r.targetValue}"`;
+      let desc = `规则${i+1}: [ID: ${r.objectId || r.id}], 物品名: "${r.name}", 核心特征: "${r.targetValue}"`;
       if (r.referenceImage) {
-        desc += `, 视觉比对参考图: ${r.referenceImage}`;
+        desc += `, 视觉身份参考图: ${r.referenceImage}`;
       }
       return desc;
     }).join('\n');
 
     const prompt = `
-      你是一个顶级的视觉比对裁判。
-      任务：判断【当前照片】与【规则库】中的哪一项是同一个物体。
+      你是一个极具洞察力的视觉识别专家，拥有极强的抗干扰比对能力。
+      
+      任务：分析【当前照片】，在【规则库】中找出对应的物品。
 
-      【规则库内容】：
+      【识别哲学（必须遵守）】：
+      1. 视觉本质优先：参考图仅代表物品的“身份”。请彻底忽略拍摄角度（侧拍、俯拍、斜拍）、光线（极暗、曝光）、背景杂乱、以及是否有人手持。
+      2. 提取核心锚点：重点寻找物品的颜色组合、独特形状、Logo、或是封面文字。
+      3. 语义联想：如果用户拍的照片很模糊，但能看出大体轮廓和颜色与某规则的[视觉身份参考图]及其[核心特征]吻合，请大胆判定匹配。
+      4. 严格分类，模糊比对：你可以容忍角度变化，但不能混淆内容。例如，识别CD时，只要确认是同一张专辑封面即可，不必管封面是否反光或折皱。
+      5. 宁错莫漏（保持适度灵敏）：只要有 60% 以上的把握确认是同一个物体，就返回 ID。
+
+      【规则库】：
       ${ruleContext}
 
-      【判定准则】：
-      1. 如果规则提供了[视觉比对参考图]，请将其作为最高权重的比对基准。
-      2. 严格区分生物与非生物：如果是【狗】，严禁匹配到【人类】；如果是【架子鼓】，必须看到支架和镲片。
-      3. 严格区分不同款式的同类物：如果两张 CD 封面文字或构图不同，严禁混淆。
-      4. 只有当相似度极高且逻辑完全自洽时，才返回对应的 ID。
-      5. 如果都不匹配，必须返回 "NONE"。
-      6. 只准输出匹配的 ID 字符串，严禁任何额外解释。
+      【输出规范】：
+      - 仅输出匹配成功的 ID 字符串。
+      - 若图中物体在库中完全没有任何相关痕迹，输出 "NONE"。
+      - 严禁任何解释说明。
     `;
 
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${ALI_API_KEY}`, "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${ALI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         model: "qwen-vl-plus", 
         messages: [{
@@ -48,19 +55,16 @@ export async function analyzeImageLocal(base64Image: string, rules: RecognitionR
     });
 
     const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content?.trim();
+    const aiText = data.choices?.[0]?.message?.content?.trim();
     
-    if (!aiResponse || aiResponse.includes("NONE")) return null;
+    // 增加一层容错过滤
+    if (!aiText || aiText.includes("NONE") || aiText.length > 50) return null;
 
-    // 提取并匹配 ID
-    const matched = rules.find(r => aiResponse.includes(r.objectId || r.id));
+    const matched = rules.find(r => aiText.includes(r.objectId || r.id));
     return matched ? (matched.objectId || matched.id) : null;
 
   } catch (e) {
-    console.error("AI 识别链路异常:", e);
+    console.error("识别引擎异常:", e);
     return null;
   }
 }
-
-export async function loadModels() {}
-export async function extractEmbedding() { return null; }
