@@ -7,14 +7,25 @@
     <meta name="referrer" content="no-referrer" />
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
     
-    <!-- 🛑 电脑端防白屏三件套 -->
+    <!-- 🛑 电脑端与手机端环境兼容补丁 -->
     <script>window.global = window;</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
     <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
     
+    <!-- 🛑 vConsole 调试器：已配置为只看重点 -->
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+    <script>var vConsole = new window.VConsole();</script>
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* 🛑 严禁斜体，统一 iOS 风格 */
+      * { font-style: normal !important; -webkit-tap-highlight-color: transparent; }
+      /* 隐藏 vConsole 以外的系统级 Log 干扰 (可选高级配置) */
+      .vc-log-item-debug, .vc-log-item-info { display: none; }
+      .vc-log-item-log { display: block !important; }
+    </style>
   </head>
-  <body>
+  <body class="bg-gray-50 font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
