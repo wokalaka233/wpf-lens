@@ -7,6 +7,9 @@ export interface FeedbackConfig {
 }
 
 export interface RecognitionRule {
+  // 🛑 核心修复：增加 objectId 以兼容 Bmob 数据库返回的 ID
+  objectId?: string; 
+  
   id: string;
   name: string;
   targetType: TargetType;
@@ -20,7 +23,7 @@ export interface RecognitionRule {
   createdAt: number;
 }
 
-// ✅ 这就是刚才缺少的“日志”定义，补上它就不报错了
+// ✅ 保留你的日志定义
 export interface RecognitionLog {
   id: string;
   timestamp: number;
