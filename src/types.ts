@@ -3,30 +3,16 @@ export type FeedbackType = 'text' | 'image' | 'video' | 'audio';
 
 export interface FeedbackConfig {
   type: FeedbackType;
-  content: string; // 文本内容 或 媒体资源的ID/URL
+  content: string;
 }
 
 export interface RecognitionRule {
-  // 🛑 核心修复：增加 objectId 以兼容 Bmob 数据库返回的 ID
-  objectId?: string; 
-  
-  id: string;
+  objectId?: string; // Bmob 云端主键
+  id: string;        // 本地/逻辑 ID
   name: string;
   targetType: TargetType;
-  targetValue: string; // OCR关键字 或 物体名称
-  
-  // 这里的问号 ? 必须保留
-  embedding?: number[]; 
-  similarityThreshold?: number; 
-  
+  targetValue: string; // 文字描述
+  referenceImage?: string; // 🛑 杀手锏：比对参考图 URL
   feedback: FeedbackConfig[];
   createdAt: number;
-}
-
-// ✅ 保留你的日志定义
-export interface RecognitionLog {
-  id: string;
-  timestamp: number;
-  matchedRuleId: string | null;
-  success: boolean;
 }
