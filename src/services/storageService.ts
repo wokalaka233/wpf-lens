@@ -29,9 +29,7 @@ export const uploadFile = async (file: File): Promise<string> => {
       headers: { 'x-oss-object-acl': 'public-read' }
     });
     return result.url.replace('http://', 'https://');
-  } catch (err) {
-    throw err;
-  }
+  } catch (err) { throw err; }
 };
 
 export const getRules = async () => {
@@ -42,25 +40,32 @@ export const getRules = async () => {
   } catch (err) { return []; }
 };
 
-// 🛑 核心修复：支持新增(POST)和更新(PUT)
+// 🛑 核心修复：PUT 请求路径及 Payload 清理
 export const saveRule = async (rule: any) => {
   const isUpdate = !!rule.objectId;
+  // 更新时 URL 必须带上 objectId，否则 Bmob 会报错
   const url = isUpdate ? `${BMOB_URL}/${rule.objectId}` : BMOB_URL;
   const method = isUpdate ? 'PUT' : 'POST';
   
-  // 过滤掉不可同步的本地临时字段
-  const { ...payload } = rule;
+  // 必须剔除这些 Bmob 不允许在更新时携带的字段
+  const { objectId, createdAt, updatedAt, ...cleanData } = rule;
   
   const res = await fetch(url, {
     method,
     headers: BMOB_HEADERS,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(cleanData),
   });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "保存失败");
+  }
   return await res.json();
 };
 
-export const deleteRule = async (id: string) => {
-  await fetch(`${BMOB_URL}/${id}`, { method: 'DELETE', headers: BMOB_HEADERS });
+export const deleteRule = async (objectId: string) => {
+  if (!objectId) return;
+  await fetch(`${BMOB_URL}/${objectId}`, { method: 'DELETE', headers: BMOB_HEADERS });
 };
 
 export const seedInitialData = () => {};
