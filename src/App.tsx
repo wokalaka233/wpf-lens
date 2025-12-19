@@ -67,7 +67,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase">1. 名称</label><input className="w-full p-5 bg-slate-50 rounded-3xl border-none font-bold outline-none" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="例如：我的水杯" /></div>
         <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase">2. 识别细节</label><textarea className="w-full p-5 bg-slate-50 rounded-3xl border-none h-28 outline-none" value={form.targetValue} onChange={e => setForm({...form, targetValue: e.target.value})} placeholder="输入AI比对的详细特征..." /></div>
         <div className="space-y-3">
-          <label className="text-xs font-bold text-slate-400 uppercase">3. 反馈设置 (已上传会变蓝)</label>
+          <label className="text-xs font-bold text-slate-400 uppercase">3. 反馈设置 </label>
           <div className="bg-slate-50 p-5 rounded-[2.5rem] space-y-4">
             <textarea className="w-full p-4 bg-white rounded-2xl text-sm border-none shadow-sm outline-none" value={form.feedback.find((f:any)=>f.type==='text')?.content || ''} onChange={e => {
               const fbs = [...form.feedback];
