@@ -1,86 +1,63 @@
 import { RecognitionRule } from '../types';
 
-// ==============================================================================
-// 阿里云 Key
 const ALI_API_KEY = "sk-2a663c4452024b0498044c4c8c31f66d"; 
-// ==============================================================================
-
-// 阿里云直连地址
 const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
 export async function analyzeImageLocal(base64Image: string, rules: RecognitionRule[]): Promise<string | null> {
-  
-  if (!ALI_API_KEY) {
-    console.error("API Key 缺失");
-    return null;
-  }
+  if (!ALI_API_KEY) return null;
 
   try {
-    console.log("🐼 正在呼叫通义千问...");
+    // 🛑 核心升级：同时把规则的文字描述和参考图链接喂给 AI
+    const ruleContext = rules.map((r, i) => {
+      let desc = `规则${i+1}: [ID: ${r.objectId || r.id}], 核心名称: "${r.name}", 文字特征: "${r.targetValue}"`;
+      if (r.referenceImage) {
+        desc += `, 视觉比对参考图: ${r.referenceImage}`;
+      }
+      return desc;
+    }).join('\n');
 
-    // 构建提示词
     const prompt = `
-      你是一个视觉识别裁判。
-      规则列表：
-      ${rules.map(r => `- ID: ${r.id}, 目标: "${r.targetValue}"`).join('\n')}
-      
-      要求：
-      1. 仔细看图。
-      2. 如果图片包含规则里的目标（模糊匹配即可），只返回该规则的 ID。
-      3. 如果都不匹配，请返回 "NO_MATCH"。
-      4. 不要解释，不要多说话。
+      你是一个顶级的视觉比对裁判。
+      任务：判断【当前照片】与【规则库】中的哪一项是同一个物体。
+
+      【规则库内容】：
+      ${ruleContext}
+
+      【判定准则】：
+      1. 如果规则提供了[视觉比对参考图]，请将其作为最高权重的比对基准。
+      2. 严格区分生物与非生物：如果是【狗】，严禁匹配到【人类】；如果是【架子鼓】，必须看到支架和镲片。
+      3. 严格区分不同款式的同类物：如果两张 CD 封面文字或构图不同，严禁混淆。
+      4. 只有当相似度极高且逻辑完全自洽时，才返回对应的 ID。
+      5. 如果都不匹配，必须返回 "NONE"。
+      6. 只准输出匹配的 ID 字符串，严禁任何额外解释。
     `;
 
-    // 发送请求
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${ALI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Authorization": `Bearer ${ALI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "qwen-vl-plus", 
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: base64Image } }
-            ]
-          }
-        ]
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: base64Image } }
+          ]
+        }]
       })
     });
 
-    if (!response.ok) {
-      console.error("网络请求失败", response.status);
-      return null;
-    }
-
     const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content?.trim();
+    
+    if (!aiResponse || aiResponse.includes("NONE")) return null;
 
-    if (data.error) {
-      console.error("阿里云报错:", data.error);
-      return null;
-    }
+    // 提取并匹配 ID
+    const matched = rules.find(r => aiResponse.includes(r.objectId || r.id));
+    return matched ? (matched.objectId || matched.id) : null;
 
-    const aiText = data.choices?.[0]?.message?.content?.trim();
-    console.log("🐼 AI回答:", aiText);
-
-    if (!aiText || aiText.includes("NO_MATCH")) return null;
-
-    // 1. 优先匹配 ID
-    const matchedRule = rules.find(r => aiText.includes(r.id));
-    if (matchedRule) return matchedRule.id;
-
-    // 2. 备用：匹配关键词
-    const fuzzyMatch = rules.find(r => r.targetValue && aiText.includes(r.targetValue));
-    if (fuzzyMatch) return fuzzyMatch.id;
-
-    return null;
-
-  } catch (e: any) {
-    console.error("运行出错:", e);
+  } catch (e) {
+    console.error("AI 识别链路异常:", e);
     return null;
   }
 }
